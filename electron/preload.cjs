@@ -1,0 +1,21 @@
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('instant',{
+  saveText:text=>ipcRenderer.invoke('save-text',text),
+  openText:()=>ipcRenderer.invoke('open-text'),
+  confirmReplace:()=>ipcRenderer.invoke('confirm-replace'),
+  setDirty:value=>ipcRenderer.send('dirty',value),
+  exportDraft:payload=>ipcRenderer.invoke('export-draft',payload),
+  loadDictionary:()=>ipcRenderer.invoke('dictionary-load'),
+  saveDictionary:entries=>ipcRenderer.invoke('dictionary-save',entries),
+  loadAppearance:()=>ipcRenderer.invoke('appearance-load'),
+  saveAppearance:value=>ipcRenderer.invoke('appearance-save',value),
+  loadChats:()=>ipcRenderer.invoke('chats-load'),
+  saveChats:value=>ipcRenderer.invoke('chats-save',value),
+  aiConfig:()=>ipcRenderer.invoke('ai-config'),
+  setAIKey:key=>ipcRenderer.invoke('ai-key',key),
+  askAI:payload=>ipcRenderer.invoke('ai-start',payload),
+  cancelAI:id=>ipcRenderer.invoke('ai-cancel',id),
+  copyText:text=>ipcRenderer.invoke('copy-text',text),
+  onAIEvent:fn=>ipcRenderer.on('ai-event',(_event,data)=>fn(data)),
+  onSaveRequest:fn=>{ipcRenderer.on('save-request',()=>fn());}
+});

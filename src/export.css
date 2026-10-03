@@ -1,0 +1,15 @@
+html.export-document,html.export-document body{height:auto;min-height:0;overflow:visible;background:#fff;color:#28352c;margin:0;width:960px}
+html.export-document body{padding:58px 68px;font-family:'CMU Serif',serif;font-size:21px;line-height:1.65}
+html.export-document #rendered h1{font-size:31px}
+html.export-document #rendered h2{font-size:15px}
+.render-block{break-inside:avoid}
+.export-document .katex-display{overflow:visible}
+.export-document .katex-display>.katex{white-space:normal}
+.export-document .katex{font-size:1.08em}
+@page{size:A4;margin:15mm}
+@media print{
+  html.export-document,html.export-document body{width:auto}
+  html.export-document body{padding:0;font-size:12pt}
+  html.export-document #rendered h1{font-size:20pt}
+  html.export-document #rendered h2{font-size:11pt}
+}

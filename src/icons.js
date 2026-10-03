@@ -1,0 +1,4 @@
+import {createElement,FilePlus,FolderOpen,Save,Download,Image,Copy,FileText,CircleHelp,Sigma,Minus,Plus,Expand,X,Sparkles,Send,Square,Settings,TriangleAlert,Moon,Sun,History,MessageSquarePlus,Trash2} from 'lucide';
+const icons={new:FilePlus,open:FolderOpen,save:Save,export:Download,image:Image,copy:Copy,pdf:FileText,help:CircleHelp,example:Sigma,minus:Minus,plus:Plus,expand:Expand,close:X,ai:Sparkles,send:Send,stop:Square,settings:Settings,warning:TriangleAlert,moon:Moon,sun:Sun,history:History,chat:MessageSquarePlus,trash:Trash2};
+export function icon(name){return createElement(icons[name]||CircleHelp,{width:18,height:18,'stroke-width':1.8,'aria-hidden':'true',class:'lucide lucide-'+name}).outerHTML;}
+export function mountIcons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release*/
+.env*
+*.dpapi
+openrouter-key.bin
+openrouter.dpapi
+assets/*.icns
+test-results/
+*.log
