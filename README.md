@@ -53,7 +53,7 @@ npm run build
 
 ## Релизы
 
-Опубликуй версионный Git-тег, совпадающий с `package.json` (сейчас `v0.8.1`). GitHub Actions проверит версию, выполнит unit-тесты и соберёт приложение на GitHub runners для Windows x64, Ubuntu x64, macOS Intel x64 и macOS Apple Silicon arm64. Успешный запуск создаст GitHub Release и добавит Windows portable, Linux AppImage, а также macOS DMG и ZIP для обоих процессоров. Для сборки не требуются Actions secrets.
+Опубликуй версионный Git-тег, совпадающий с `package.json` (сейчас `v0.8.2`). GitHub Actions проверит версию, выполнит unit-тесты и соберёт приложение на GitHub runners для Windows x64, Ubuntu x64, macOS Intel x64 и macOS Apple Silicon arm64. Успешный запуск создаст GitHub Release и добавит Windows portable, Linux AppImage, а также macOS DMG и ZIP для обоих процессоров. Для сборки не требуются Actions secrets.
 
 Технологии: Electron, CodeMirror 6, KaTeX, JetBrains Mono Variable, Computer Modern, Lucide.
 

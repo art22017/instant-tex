@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {preferences}=require('../electron/preferences.cjs');
 test('Windows transient locks retry atomic preference replacement',async()=>{
-  const base=path.resolve('test-results'),root=await fs.mkdtemp(path.join(base,'preferences-retry-')),rename=fs.rename;let attempts=0;
+  const base=path.resolve('test-results');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'preferences-retry-')),rename=fs.rename;let attempts=0;
   try{const p=preferences({getPath:()=>root},{});await p.ready;
     fs.rename=async(from,to)=>{if(path.dirname(to)===root&&path.basename(to)==='commands.json'&&attempts++<2){const e=new Error('temporary lock');e.code='EPERM';throw e;}return rename(from,to);};
     await p.flush();assert.equal(attempts,3);assert.ok(await fs.readFile(path.join(root,'commands.json'),'utf8'));
