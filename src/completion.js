@@ -5,6 +5,16 @@ import {keymap} from '@codemirror/view';
 const entry=(name,template,detail)=>({name:'\\'+name,template,detail});
 const env=(name,detail)=>entry(`begin{${name}}`,`\\begin{${name}}\n\t\${}\n\\end{${name}}`,detail);
 export const builtins = [
+  ...['itemize','enumerate','description','figure','table'].map(n=>env(n,'Оформление '+n)),
+  entry('begin{tabular}','\\begin{tabular}{${lc}}\n\t${} & ${} \\\\\n\\end{tabular}','Таблица'),
+  entry('begin{thebibliography}','\\begin{thebibliography}{99}\n\\bibitem{${key}} ${Источник}\n\\end{thebibliography}','Список литературы'),
+  entry('includegraphics','\\includegraphics[width=0.8\\linewidth]{${image.png}}','Изображение'),
+  entry('item','\\item ${}','Пункт списка'),
+  ...['caption','label','ref','eqref','cite','bibliography','bibliographystyle','url'].map(n=>entry(n,`\\${n}{\${}}`,n)),
+  entry('bibitem','\\bibitem{${key}} ${}','Источник'),
+  entry('multicolumn','\\multicolumn{${2}}{${c}}{${}}','Объединить ячейки'),
+  entry('hline','\\hline','Линия таблицы'),
+
   entry('frac','\\frac{${}}{${}}','Дробь'),entry('dfrac','\\dfrac{${}}{${}}','Дробь в полный размер'),
   entry('tfrac','\\tfrac{${}}{${}}','Маленькая дробь'),entry('sqrt','\\sqrt{${}}','Корень'),
   ...['binom','dbinom','tbinom','overset','underset','stackrel','textcolor'].map(n=>entry(n,`\\${n}{\${}}{\${}}`,n)),
@@ -93,7 +103,7 @@ export function rankedCommands(items,typed){
     const group=environment?(environment[1]==='end'?2:query?0:1):(query?1:0);
     const prefix=name.startsWith(query)?0:1;
     return{...item,matches,group,prefix};
-  }).filter(Boolean).sort((a,b)=>a.group-b.group||a.prefix-b.prefix||(b.uses||0)-(a.uses||0)||a.name.localeCompare(b.name));
+  }).filter(Boolean).sort((a,b)=>a.prefix-b.prefix||a.group-b.group||(b.uses||0)-(a.uses||0)||a.name.localeCompare(b.name));
 }
 export function completionSource(dictionary){
   return ctx=>{

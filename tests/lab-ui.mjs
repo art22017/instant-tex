@@ -1,0 +1,40 @@
+import {_electron as electron} from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+const app=await electron.launch({executablePath:env.INSTANT_EXE,args:env.INSTANT_EXE?[]:['.'],env});
+const root=path.resolve('test-results/lab-ui');await fs.mkdir(root,{recursive:true});const errors=[];
+try{
+  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.waitForFunction(()=>window.instantDebug?.editor);
+  const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=400;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,800,400);x.strokeStyle='#334a3a';x.lineWidth=2;x.beginPath();x.moveTo(50,20);x.lineTo(50,350);x.lineTo(760,350);x.stroke();x.strokeStyle='#4f9270';x.lineWidth=4;x.beginPath();for(let i=0;i<=700;i++){const px=50+i,py=350-300*(i/700)**2;i?x.lineTo(px,py):x.moveTo(px,py);}x.stroke();x.fillStyle='#334a3a';x.font='24px serif';x.fillText('y = x²',70,40);return c.toDataURL('image/png').split(',')[1];});
+  await fs.writeFile(path.join(root,'plot.png'),Buffer.from(png,'base64'));
+  await fs.writeFile(path.join(root,'refs.bib'),'@article{paper,author={Петров},title={Измерения},year={2026}}','utf8');
+  await app.evaluate(({dialog},root)=>{dialog.showMessageBox=async()=>({response:1});dialog.showOpenDialog=async(_win,o)=>({canceled:false,filePaths:o.title==='Изображения или библиография'?(globalThis.labOnlyImage?[root+'\\plot.png']:[root+'\\plot.png',root+'\\refs.bib']):[root+'\\lab.itex']});dialog.showSaveDialog=async(_win,o)=>({canceled:false,filePath:root+'\\'+(o.title==='Сохранить черновик'?'lab.itex':'lab.pdf')});},root);
+  await app.evaluate(()=>globalThis.labOnlyImage=true);
+  await page.locator('#insert-resource').click();
+  await page.waitForFunction(()=>document.querySelector('#rendered .tex-image')&&window.instantDebug.result.issues.length===0);
+  assert.ok(await page.evaluate(()=>{const s=window.instantDebug.editor.state.doc.toString();return s.indexOf('\\begin{figure}')>s.indexOf('\\end{gather*}');}));
+  await page.locator('#new').click();await app.evaluate(()=>globalThis.labOnlyImage=false);
+  await page.locator('#insert-resource').click();await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString().includes('\\bibliography{refs}'));
+  await page.waitForFunction(()=>window.instantDebug.result.issues.length===0&&document.querySelector('#rendered .tex-image'));
+  assert.ok(await page.evaluate(()=>{const s=window.instantDebug.editor.state.doc.toString();return s.indexOf('\\begin{figure}')>s.indexOf('\\end{gather*}')&&s.indexOf('\\bibliography{refs}')<s.indexOf('\\end{document}');}));
+  const lab=await fs.readFile('examples/lab.tex','utf8');await page.evaluate(source=>{const e=window.instantDebug.editor;e.dispatch({changes:{from:0,to:e.state.doc.length,insert:source},selection:{anchor:0}});},lab.replace('\\end{document}','\nДополнительно: \\cite{paper}.\n\\bibliography{refs}\n\\end{document}'));
+  await page.waitForFunction(()=>document.querySelector('#rendered .tex-tabular')&&window.instantDebug.result.issues.length===0);
+  assert.equal(await page.locator('#rendered .tex-image').evaluate(e=>e.complete&&e.naturalWidth),800);assert.equal(await page.locator('#rendered .tex-equation-number').count(),4);
+  assert.equal(await page.locator('#rendered .tex-tabular tr').count(),3);
+  await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('сохранён'));
+  const saved=JSON.parse(await fs.readFile(path.join(root,'lab.itex'),'utf8'));assert.equal(saved.assets['plot.png'].data,png);assert.ok(saved.assets['refs.bib']);assert.ok(!saved.text.includes('base64'));
+  await page.locator('#new').click();await page.locator('#open').click();await page.waitForFunction(()=>document.querySelector('#rendered .tex-tabular'));
+  assert.equal(await page.locator('#rendered .tex-image').evaluate(e=>e.complete&&e.naturalWidth),800);
+  await page.screenshot({path:'test-results/lab-preview.png'});
+  await page.locator('#export-toggle').click();await page.locator('#pdf').click();await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('lab.pdf'),{timeout:60000});
+  const pdf=await fs.readFile(path.join(root,'lab.pdf'));assert.equal(pdf.subarray(0,5).toString(),'%PDF-');assert.ok(pdf.includes(Buffer.from('/Subtype /Image')));
+  // Pasting an image adds a separate resource, not base64 inside CodeMirror.
+  await page.evaluate(png=>{const data=new DataTransfer();data.items.add(new File([Uint8Array.from(atob(png),c=>c.charCodeAt(0))],'clipboard.png',{type:'image/png'}));document.querySelector('.cm-editor').dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));},png);
+  await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString().match(/\\includegraphics/g)?.length>=2);
+  await page.waitForFunction(()=>document.querySelectorAll('#rendered .tex-image').length===2&&window.instantDebug.result.issues.length===0);
+  assert.ok(!await page.evaluate(()=>window.instantDebug.editor.state.doc.toString().includes('base64')));
+  assert.deepEqual(errors,[]);console.log('PASS: import, image paste, tables/lists/references, self-contained save/reopen, real PDF export');
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(w=>w.destroy()));
+}finally{await app.close();}

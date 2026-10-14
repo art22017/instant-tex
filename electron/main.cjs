@@ -1,11 +1,18 @@
 const {app,BrowserWindow,ipcMain,dialog,clipboard,Menu,session,safeStorage}=require('electron');
-const {MODEL,streamAnswer}=require('./ai.cjs');
+const {streamAnswer,requestBody}=require('./ai.cjs');
+const {MODELS}=require('./models.cjs');
 const {preferences}=require('./preferences.cjs');
 const fs=require('node:fs/promises');
+const {validateDocument,readResource,openDocument,saveDocument}=require('./document.cjs');
 const path=require('node:path');
 let main,dirty=false,allowClose=false,lastPath=null,closePending=false;
 let settings;
+const {FileWatch}=require('./file-watch.cjs');
+const fileWatch=new FileWatch(data=>{if(main&&!main.webContents.isDestroyed())main.webContents.send('file-event',data);});
 const aiJobs=new Map();
+const workJobs=new Map();
+function cancelWork(job){job.controller.abort();if(job.done)job.finish(false);}
+const {randomUUID}=require('node:crypto');
 app.setPath('userData',path.join(app.getPath('appData'),'InstantTeX'));
 const exportJobs=new Map();
 const preload=path.join(__dirname,'preload.cjs');
@@ -38,18 +45,20 @@ ipcMain.handle('confirm-replace',async event=>{
   const {response}=await dialog.showMessageBox(main,{type:'question',title:'Заменить черновик?',message:'Текущий текст не сохранён.',buttons:['Оставить текст','Заменить'],defaultId:0,cancelId:0,noLink:true});
   return response===1;
 });
-ipcMain.handle('save-text',async(event,text)=>{
-  checkSender(event);if(typeof text!=='string'||text.length>10_000_000)throw new Error('Слишком большой текст');
-  const {canceled,filePath}=await dialog.showSaveDialog(main,{title:'Сохранить черновик',defaultPath:lastPath||'Черновик.tex',filters:[{name:'LaTeX / текст UTF-8',extensions:['tex','txt']}]});
-  if(canceled||!filePath)return null;
-  await fs.writeFile(filePath,text,'utf8');lastPath=filePath;return path.basename(filePath);
+ipcMain.handle('save-text',async(event,value)=>{
+  checkSender(event);const doc=validateDocument(value),hasAssets=Object.keys(doc.assets).length>0;
+  const {canceled,filePath}=await dialog.showSaveDialog(main,{title:'Сохранить черновик',defaultPath:lastPath||('Черновик.'+(hasAssets?'itex':'tex')),filters:hasAssets?[{name:'Instant TeX · текст и вложения',extensions:['itex']},{name:'LaTeX · вложения рядом с .tex',extensions:['tex']}]:[{name:'LaTeX / текст UTF-8',extensions:['tex','txt']},{name:'Instant TeX',extensions:['itex']}]});
+  if(canceled||!filePath)return null;await fileWatch.guard(filePath,value?.fileRevision);const resume=fileWatch.pause(filePath);try{await saveDocument(filePath,doc,()=>fileWatch.guard(filePath,value?.fileRevision));lastPath=filePath;return{name:path.basename(filePath),watch:await fileWatch.saved(filePath)};}finally{resume();}
 });
 ipcMain.handle('open-text',async event=>{
-  checkSender(event);
-  const {canceled,filePaths}=await dialog.showOpenDialog(main,{title:'Открыть текст',properties:['openFile'],filters:[{name:'LaTeX / текст',extensions:['tex','txt','md']}]});
-  if(canceled)return null;
-  if((await fs.stat(filePaths[0])).size>2_000_000)throw new Error('Для живого черновика лимит — 2 МБ');
-  const text=(await fs.readFile(filePaths[0],'utf8')).replace(/^\uFEFF/,'');lastPath=filePaths[0];return{text,name:path.basename(lastPath)};
+  checkSender(event);const {canceled,filePaths}=await dialog.showOpenDialog(main,{title:'Открыть документ',properties:['openFile'],filters:[{name:'Instant TeX / LaTeX / текст',extensions:['itex','tex','txt','md']}]});
+  if(canceled)return null;const doc=await openDocument(filePaths[0]);lastPath=filePaths[0];return{...doc,name:path.basename(lastPath),watch:fileWatch.start(lastPath,doc)};
+});
+ipcMain.handle('file-detach',event=>{checkSender(event);fileWatch.stop();lastPath=null;});
+ipcMain.handle('import-resources',async event=>{
+  checkSender(event);const {canceled,filePaths}=await dialog.showOpenDialog(main,{title:'Изображения или библиография',properties:['openFile','multiSelections'],filters:[{name:'Изображения / BibTeX',extensions:['png','jpg','jpeg','webp','gif','bib']}]});
+  if(canceled)return[];if(filePaths.length>200)throw new Error('Не больше 200 вложений');const resources=[];let size=0;
+  for(const file of filePaths){const r=await readResource(file);size+=r.data.length;if(size>85*1024*1024)throw new Error('Общий лимит вложений — 64 МБ');resources.push(r);}return resources;
 });
 
 ipcMain.handle('dictionary-load',async event=>{checkSender(event);return settings.getDictionary();});
@@ -58,13 +67,17 @@ ipcMain.handle('appearance-load',async event=>{checkSender(event);return setting
 ipcMain.handle('appearance-save',(event,value)=>{checkSender(event);settings.saveAppearance(value);});
 ipcMain.handle('chats-load',async event=>{checkSender(event);return settings.getChats();});
 ipcMain.handle('chats-save',(event,value)=>{checkSender(event);settings.saveChats(value);});
-ipcMain.handle('ai-config',async event=>{checkSender(event);return{model:MODEL,hasKey:!!await settings.key()};});
+ipcMain.handle('ai-config',async event=>{checkSender(event);return{models:MODELS,model:await settings.getModel(),hasKey:!!await settings.key(),workEnabled:await settings.getWorkEnabled()};});
+ipcMain.handle('work-enable',async(event,value,phrase)=>{checkSender(event);if(typeof value!=='boolean')throw new Error('Некорректная настройка');const enabled=await settings.setWorkEnabled(value,phrase);if(!enabled)for(const job of workJobs.values())cancelWork(job);return enabled;});
+ipcMain.handle('ai-model',async(event,value)=>{checkSender(event);return settings.setModel(value);});
 ipcMain.handle('ai-key',async(event,key)=>{checkSender(event);await settings.setKey(key);return true;});
 ipcMain.handle('ai-start',async(event,payload)=>{
   checkSender(event);
   if(!payload||typeof payload.id!=='string'||payload.id.length>100)throw new Error('Некорректный запрос');
+  payload={...payload,model:payload.model??await settings.getModel()};requestBody(payload);
   const key=await settings.key();if(!key)throw new Error('Добавь ключ OpenRouter в настройках AI');
   for(const job of aiJobs.values())job.abort();
+  for(const job of workJobs.values())cancelWork(job);
   const controller=new AbortController();aiJobs.set(payload.id,controller);
   const timer=setTimeout(()=>controller.abort('timeout'),120000);
   const emit=data=>{if(!event.sender.isDestroyed())event.sender.send('ai-event',{id:payload.id,...data});};
@@ -73,7 +86,32 @@ ipcMain.handle('ai-start',async(event,payload)=>{
   void streamAnswer(payload,key,controller.signal,text=>emit({type:'chunk',text}),aiFetch).then(()=>emit({type:'done'})).catch(error=>emit({type:controller.signal.aborted?'stopped':'error',message:controller.signal.reason==='timeout'?'Время ожидания истекло':String(error.message).replaceAll(key,'[key]').slice(0,500)})).finally(()=>{clearTimeout(timer);aiJobs.delete(payload.id);});
   return true;
 });
-ipcMain.handle('ai-cancel',(event,id)=>{checkSender(event);aiJobs.get(id)?.abort();});
+ipcMain.handle('ai-cancel',(event,id)=>{checkSender(event);aiJobs.get(id)?.abort();const job=workJobs.get(id);if(job)cancelWork(job);});
+ipcMain.handle('work-decision',async(event,payload)=>{
+  checkSender(event);const job=workJobs.get(payload?.id);
+  if(!job?.done||job.proposalId!==payload.proposalId)throw new Error('Сначала дождись завершения агента');
+  if(typeof payload.currentDocument!=='string'||payload.currentDocument.length>2_000_000)throw new Error('Некорректный документ');
+  const accepted=payload.accepted===true&&await settings.getWorkEnabled()&&payload.currentDocument===job.after;
+  job.finish(accepted);return true;
+});
+ipcMain.handle('work-start',async(event,payload)=>{
+  checkSender(event);if(!payload||typeof payload.id!=='string'||payload.id.length>100)throw new Error('Некорректный запрос');payload={...payload,model:payload.model??await settings.getModel()};requestBody(payload);
+  if(!await settings.getWorkEnabled())throw new Error('Work отключён в настройках');
+  const key=await settings.key();if(!key)throw new Error('Добавь ключ OpenRouter');
+  for(const job of aiJobs.values())job.abort();for(const job of workJobs.values())cancelWork(job);
+  const controller=new AbortController(),job={controller,before:payload.context,after:payload.context,proposalId:randomUUID(),done:false};workJobs.set(payload.id,job);
+  const emit=data=>{if(!event.sender.isDestroyed())event.sender.send('ai-event',{id:payload.id,...data});};
+  job.finish=accepted=>{if(!workJobs.has(payload.id))return;emit({type:'edit_decision',proposalId:job.proposalId,accepted});workJobs.delete(payload.id);};
+  const stage=proposal=>{if(controller.signal.aborted)throw new Error('Остановлено');job.after=proposal.after;emit({type:'draft_update',proposalId:job.proposalId,before:job.before,after:job.after});};
+  void import('./work.mjs').then(async({runWork,changeCounts})=>{
+    await runWork(payload,key,controller.signal,emit,(...args)=>session.fromPartition('ai-network').fetch(...args),stage);
+    if(controller.signal.aborted)throw new Error('Остановлено');job.done=true;
+    if(job.after!==job.before)emit({type:'edit_proposal',proposalId:job.proposalId,before:job.before,after:job.after,...changeCounts(job.before,job.after)});
+    else job.finish(false);
+    emit({type:'done'});
+  }).catch(error=>{job.finish(false);emit({type:controller.signal.aborted?'stopped':'error',message:String(error.message).replaceAll(key,'[key]').slice(0,500)});});
+  return true;
+});
 async function writeClipboard(write,verify){
   for(let attempt=0;attempt<5;attempt++){
     try{write();if(verify())return true;}catch{}
@@ -118,7 +156,7 @@ ipcMain.handle('export-payload',event=>{
 });
 ipcMain.handle('export-draft',async(event,payload)=>{
   checkSender(event);
-  if(!payload||!['pdf','png','clipboard'].includes(payload.format)||typeof payload.html!=='string'||payload.html.length>20_000_000)throw new Error('Некорректный экспорт');
+  if(!payload||!['pdf','png','clipboard'].includes(payload.format)||typeof payload.html!=='string'||payload.html.length>100_000_000)throw new Error('Некорректный экспорт');
   let filePath;
   if(payload.format!=='clipboard'){
     const chosen=await dialog.showSaveDialog(main,{title:'Экспорт превью',defaultPath:`Черновик.${payload.format}`,filters:[{name:payload.format.toUpperCase(),extensions:[payload.format]}]});
@@ -134,4 +172,4 @@ app.whenReady().then(async()=>{
   session.defaultSession.webRequest.onBeforeRequest((details,callback)=>callback({cancel:/^https?:|^wss?:/i.test(details.url)}));
   await createWindow();
 });
-app.on('window-all-closed',()=>{for(const job of aiJobs.values())job.abort();settings?.flush().finally(()=>app.quit());});
+app.on('window-all-closed',()=>{fileWatch.stop();for(const job of aiJobs.values())job.abort();for(const job of workJobs.values())cancelWork(job);settings?.flush().finally(()=>app.quit());});

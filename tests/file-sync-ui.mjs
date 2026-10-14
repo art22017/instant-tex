@@ -1,0 +1,40 @@
+import {_electron as electron} from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+const root=path.resolve('test-results/sync-ui');await fs.mkdir(root,{recursive:true});const file=path.join(root,'watched.tex');await fs.writeFile(file,'Первый\nВторой\nТретий\n');
+const app=await electron.launch({executablePath:env.INSTANT_EXE,args:env.INSTANT_EXE?[]:['.'],env});const errors=[];
+try{
+  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.waitForFunction(()=>window.instantDebug?.editor);
+  await app.evaluate(({dialog,ipcMain},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showSaveDialog=async()=>({canceled:false,filePath:file});dialog.showMessageBox=async()=>({response:1});
+    for(const name of ['ai-config','chats-load','chats-save','ai-start','ai-cancel','work-start','work-decision'])ipcMain.removeHandler(name);
+    ipcMain.handle('ai-config',()=>({hasKey:true,workEnabled:true}));ipcMain.handle('chats-load',()=>[]);ipcMain.handle('chats-save',()=>true);
+    ipcMain.handle('ai-start',(event,payload)=>{globalThis.syncJob={event,payload};setTimeout(()=>event.sender.send('ai-event',{id:payload.id,type:'chunk',text:'Ответ'}),10);return true;});
+    ipcMain.handle('ai-cancel',()=>{const j=globalThis.syncJob;j.event.sender.send('ai-event',{id:j.payload.id,type:'stopped'});return true;});
+    ipcMain.handle('work-start',(event,p)=>{globalThis.syncWork={event,id:p.id};const after=p.context.replace('Внешнее','АГЕНТ');setTimeout(()=>{for(const type of ['draft_update','edit_proposal'])event.sender.send('ai-event',{id:p.id,type,proposalId:'sync',before:p.context,after,added:1,removed:1});event.sender.send('ai-event',{id:p.id,type:'done'});},20);return true;});
+    ipcMain.handle('work-decision',(_event,p)=>{globalThis.syncWork.event.sender.send('ai-event',{id:p.id,type:'edit_decision',proposalId:p.proposalId,accepted:p.accepted});return true;});
+  },file);
+  const source=()=>page.evaluate(()=>window.instantDebug.editor.state.doc.toString());
+  const edit=text=>page.evaluate(text=>{const e=window.instantDebug.editor;e.dispatch({changes:{from:0,to:e.state.doc.length,insert:text}});},text);
+  await page.locator('#open').click();await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString().startsWith('Первый'));
+  await page.evaluate(()=>new MutationObserver(()=>window.previewChangedAt=Date.now()).observe(document.getElementById('rendered'),{childList:true,subtree:true,characterData:true}));
+  const start=Date.now();await fs.writeFile(file,'ПЕРВЫЙ\nВторой\nТретий\n');await page.waitForFunction(()=>document.getElementById('rendered').textContent.includes('ПЕРВЫЙ'),{polling:'raf'});const elapsed=await page.evaluate(start=>window.previewChangedAt-start,start);
+  await edit('ПЕРВЫЙ\nВторой\nТретий\nМой новый текст\n');await fs.writeFile(file,'ПЕРВЫЙ\nВТОРОЙ\nТретий\n');await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString().includes('ВТОРОЙ'));
+  assert.equal(await source(),'ПЕРВЫЙ\nВТОРОЙ\nТретий\nМой новый текст\n');assert.equal(await page.locator('#file-sync').isVisible(),false);
+  await edit('ПЕРВЫЙ\nВТОРОЙ\nМоя версия\nМой новый текст\n');await fs.writeFile(file,'ПЕРВЫЙ\nВТОРОЙ\nВнешняя версия\n');await page.locator('#file-sync-review').waitFor({state:'visible'});
+  assert.ok((await source()).includes('Моя версия'));await page.locator('#file-sync-review').click();await page.locator('#file-conflicts').waitFor({state:'visible'});
+  await page.locator('#file-conflict-items input[value="remote"]').check();await page.locator('#file-conflicts-apply').click();assert.equal(await source(),'ПЕРВЫЙ\nВТОРОЙ\nВнешняя версия\nМой новый текст\n');
+  await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('toast').textContent==='Текст сохранён');assert.equal(await fs.readFile(file,'utf8'),await source());
+  const replacement=path.join(root,'atomic.tmp');await fs.writeFile(replacement,'После атомарной замены\n');await fs.rename(replacement,file);await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString()==='После атомарной замены\n');
+  // UI edits after a remote update must stay intact on the next external write.
+  await edit('После атомарной замены\nНабрано после\n');await fs.writeFile(file,'Внешнее изменение\n');await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString()==='Внешнее изменение\nНабрано после\n');
+  await page.locator('#ai-toggle').click();const before=await page.locator('#ai-panel').boundingBox();const heading=await page.locator('.ai-heading strong').boundingBox();await page.mouse.move(heading.x+10,heading.y+8);await page.mouse.down();await page.mouse.move(heading.x-180,heading.y-140,{steps:5});await page.mouse.up();const after=await page.locator('#ai-panel').boundingBox();assert.ok(after.x<before.x-100);assert.ok(after.y<before.y-70);
+  await page.locator('#ai-question').fill('Привет');await page.locator('#ai-send').click();await page.locator('#ai-stop').waitFor({state:'visible'});assert.equal(await page.locator('#ai-send').isVisible(),false);assert.equal(await page.locator('#ai-form #ai-stop').count(),1);
+  await page.locator('#ai-stop').click();await page.locator('#ai-send').waitFor({state:'visible'});assert.equal(await page.locator('#ai-stop').isVisible(),false);assert.equal(await page.locator('#ai-question').getAttribute('placeholder'),'Задайте вопрос…');
+  await page.locator('#ai-work-mode').click();await page.locator('#ai-question').fill('Правка');await page.locator('#ai-send').click();await page.locator('#work-accept').waitFor({state:'visible'});assert.ok((await source()).includes('АГЕНТ'));
+  await fs.writeFile(file,'Внешнее изменение извне\n');await page.locator('#file-sync').waitFor({state:'visible'});assert.equal((await source()).includes('извне'),false);
+  await page.locator('#work-accept').click();await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString().includes('извне'));assert.equal(await source(),'АГЕНТ изменение извне\nНабрано после\n');
+  await page.keyboard.press('Escape');await page.locator('#new').click();const fresh=await source();await fs.writeFile(file,'Этот файл больше не открыт');await new Promise(r=>setTimeout(r,100));assert.equal(await source(),fresh);
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({status:'PASS',externalWriteToDOMMs:elapsed,independentMerge:true,conflictReview:true,atomicRename:true,detach:true,draggableAI:true,stopReplacesSend:true}));
+}finally{await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(w=>w.destroy()));await app.close();}

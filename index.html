@@ -1,6 +1,6 @@
 <!doctype html><html lang="ru"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:*; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:*; object-src 'none'; base-uri 'none'">
 <title>Instant TeX</title></head><body>
 <header class="toolbar">
   <button id="new" data-icon="new" title="Новый документ · Ctrl+N" aria-label="Новый документ"></button>
@@ -10,6 +10,7 @@
   <div class="export-menu"><button id="export-toggle" data-icon="export" title="Экспорт" aria-label="Экспорт" aria-expanded="false"></button><div id="export-options" hidden>
     <button id="pdf"><span data-icon="pdf"></span>PDF</button><button id="png"><span data-icon="image"></span>PNG · 2×</button><button id="copy-image"><span data-icon="copy"></span>Копировать картинку</button>
   </div></div>
+  <button id="insert-resource" data-icon="image" title="Вставить изображение или .bib" aria-label="Вставить изображение или библиографию"></button>
   <button id="example" data-icon="example" title="Пример решения" aria-label="Пример решения"></button>
   <button id="help" data-icon="help" title="Справка · F1" aria-label="Справка"></button>
   <div class="appearance-menu"><button id="appearance-toggle" data-icon="settings" title="Размер шрифта" aria-label="Размер шрифта" aria-expanded="false"></button>
@@ -19,12 +20,13 @@
       <label class="weight-control" for="editor-weight">Вес кода <output id="editor-weight-label">670</output><input id="editor-weight" type="range" min="400" max="800" step="10" value="670" aria-label="Насыщенность шрифта кода"></label>
       <small>Ctrl + колесо — масштаб панели под курсором</small>
       <button id="appearance-reset" type="button">Сбросить</button>
+      <button id="work-settings-toggle" type="button">Work…</button>
     </div>
   </div>
   <span id="cursor"></span>
   <button id="theme-toggle" data-icon="moon" title="Тёмная тема" aria-label="Переключить тему"></button>
 </header>
-<main id="workspace"><section class="source-panel"><div id="editor"></div></section>
+<main id="workspace"><section class="source-panel"><div id="editor"></div><div id="work-review" hidden><span>Edited</span><span id="work-counts"></span><button id="work-accept" data-icon="check" title="Принять правку" aria-label="Принять правку"></button><button id="work-reject" data-icon="close" title="Отклонить правку" aria-label="Отклонить правку"></button></div></section>
 <div id="divider" role="separator" aria-label="Ширина редактора" aria-orientation="vertical" tabindex="0"></div>
 <section class="preview-panel">
   <div class="preview-controls"><button id="zoom-out" data-icon="minus" title="Уменьшить" aria-label="Уменьшить"></button><span id="zoom-label">100%</span><button id="zoom-in" data-icon="plus" title="Увеличить" aria-label="Увеличить"></button><button id="focus" data-icon="expand" title="Только превью · Ctrl+Shift+F" aria-label="Только превью"></button></div>
@@ -35,21 +37,25 @@
 <button id="selection-ai" hidden><span data-icon="ai"></span>Ask AI</button>
 <button id="ai-toggle" data-icon="ai" title="AI · вопрос по документу" aria-label="AI: вопрос по документу"></button>
 <aside id="ai-panel" hidden>
-  <div class="ai-heading"><strong>AI</strong><button id="ai-new" data-icon="chat" title="Новый чат" aria-label="Новый чат"></button><button id="ai-history-toggle" data-icon="history" title="История чатов" aria-label="История чатов"></button><button id="ai-settings" data-icon="settings" title="Ключ OpenRouter" aria-label="Настройки AI"></button><button id="ai-close" data-icon="close" title="Закрыть" aria-label="Закрыть AI"></button></div>
-  <div id="ai-key-form" hidden><label for="ai-key">Ключ OpenRouter</label><div><input id="ai-key" type="password" autocomplete="off" placeholder="sk-or-…"><button id="ai-key-save" data-icon="save" title="Сохранить ключ" aria-label="Сохранить ключ"></button></div></div>
+  <div class="ai-heading"><strong>AI</strong><button id="ai-new" data-icon="chat" title="Новый чат" aria-label="Новый чат"></button><button id="ai-history-toggle" data-icon="history" title="История чатов" aria-label="История чатов"></button><button id="ai-settings" data-icon="settings" title="Ключ OpenRouter" aria-label="Настройки AI"></button><div class="ai-modes" role="tablist" aria-label="Режим AI"><button id="ai-ask-mode" role="tab" aria-selected="true">Ask</button><button id="ai-work-mode" role="tab" aria-selected="false" disabled>Work</button></div><button id="ai-close" data-icon="close" title="Закрыть" aria-label="Закрыть AI"></button></div>
+  <div id="ai-key-form" hidden><label for="ai-key">Ключ OpenRouter</label><div><input id="ai-key" type="password" autocomplete="off" placeholder="sk-or-…"><button id="ai-key-save" data-icon="save" title="Сохранить ключ" aria-label="Сохранить ключ"></button></div><button id="ai-work-settings" type="button">Work…</button></div>
   <div id="ai-selection" hidden></div>
   <div id="ai-history" hidden></div>
   <div id="ai-answer" aria-live="off"></div>
-  <div class="ai-answer-tools"><span id="ai-status">Весь документ будет передан вместе с вопросом.</span><button id="ai-copy" data-icon="copy" title="Скопировать ответ" aria-label="Скопировать ответ" disabled></button><button id="ai-stop" data-icon="stop" title="Остановить" aria-label="Остановить ответ" hidden></button></div>
-  <form id="ai-form"><textarea id="ai-question" rows="2" placeholder="Задайте вопрос…" aria-label="Вопрос AI"></textarea><button id="ai-send" data-icon="send" type="submit" title="Отправить" aria-label="Отправить вопрос"></button></form>
+  <div class="ai-answer-tools"><span id="ai-status">Весь документ будет передан вместе с вопросом.</span><button id="ai-copy" data-icon="copy" title="Скопировать ответ" aria-label="Скопировать ответ" disabled></button></div>
+  <form id="ai-form"><div class="ai-composer"><textarea id="ai-question" rows="2" placeholder="Задайте вопрос…" aria-label="Вопрос AI"></textarea><button id="ai-model" type="button" aria-label="Модель AI" aria-haspopup="listbox" aria-expanded="false" aria-controls="ai-model-menu"></button></div><button id="ai-send" data-icon="send" type="submit" title="Отправить" aria-label="Отправить вопрос"></button><button id="ai-stop" data-icon="stop" type="button" title="Остановить" aria-label="Остановить ответ" hidden></button></form>
 </aside>
+<div id="ai-model-menu" role="listbox" aria-label="Модель AI" hidden></div>
 <div id="toast" role="status" hidden></div>
+<div id="file-sync" hidden><span id="file-sync-message"></span><button id="file-sync-review" type="button">Сравнить</button></div>
+<dialog id="file-conflicts"><div class="dialog-heading"><h2>Изменения файла</h2><button id="file-conflicts-close" data-icon="close" aria-label="Закрыть сравнение"></button></div><p>Независимые правки объединятся автоматически. Выбери вариант только для пересекающихся изменений. Файл на диске изменится после сохранения.</p><div id="file-conflict-items"></div><button id="file-conflicts-apply" type="button">Применить выбор</button></dialog>
+<dialog id="work-settings-dialog"><div class="dialog-heading"><h2 id="work-enabled-state">Work отключён</h2><button id="work-settings-close" data-icon="close" aria-label="Закрыть настройки"></button></div><button id="work-disable" type="button" hidden>Отключить Work</button><form id="work-enable-form"><p>Чтобы включить Work, введи вручную:</p><p class="work-enable-phrase">я понимаю что я бездарь и ничему не научусь</p><input id="work-phrase" type="text" autocomplete="off" spellcheck="false" aria-label="Фраза для включения Work" required><button type="submit">Включить Work</button></form></dialog>
 <dialog id="help-dialog"><div class="dialog-heading"><h2>Коротко о редакторе</h2><button id="close-help" data-icon="close" aria-label="Закрыть"></button></div>
 <p>Русский текст — как есть. Формулы: <code>\(…\)</code>, <code>\[…\]</code>, <code>$…$</code>, <code>$$…$$</code>. Есть <code>gather</code>, <code>align</code>, матрицы и системы.</p>
 <p><kbd>Ctrl+Space</kbd> — команды. <kbd>Tab</kbd> — принять / следующая скобка. <kbd>Enter</kbd> внутри многострочной формулы добавляет <code>\\</code>; <kbd>Shift+Enter</kbd> — только перенос.</p>
 <p><kbd>Ctrl + колесо</kbd> меняет масштаб только панели под курсором. Шестерёнка сверху задаёт размер шрифта кода и превью. Настройки запоминаются.</p>
 <p>Частота выбора сортирует команды. Команды из документа появляются сразу и после минуты без ошибок попадают в общий словарь.</p>
-<p>Выдели код или текст превью → <b>Ask AI</b>. Кнопка внизу справа задаёт вопрос по всему документу. Передаются <code>context</code>, <code>selection</code>, <code>question</code>. Ответ не меняет текст.</p>
-<p>Превью использует KaTeX, не весь TeX. Пакеты из преамбулы не выполняются. PDF — печать превью. Черновик в памяти; <kbd>Ctrl+S</kbd> сохраняет его.</p>
+<p>Выдели код или текст превью → <b>Ask AI</b>. Кнопка внизу справа открывает чат по всему документу. <b>Ask</b> отвечает на вопросы. <b>Work</b> использует Pi: текст и инструменты идут по порядку в чате, правки сразу видны в редакторе. После завершения прими или отклони общий итоговый дифф. Work по умолчанию отключён; включение — в настройках.</p>
+<p>Изображение или .bib: кнопка с картинкой, Ctrl+V или перетаскивание в код. Таблицы: <code>tabular</code> внутри <code>table</code>; списки: <code>enumerate</code>, <code>itemize</code>. Подписи: <code>\caption</code>, метки и ссылки: <code>\label</code>, <code>\ref</code>, <code>\eqref</code>. Источники: <code>\bibitem</code>, <code>\cite</code>. Окружения формул без * нумеруются автоматически.</p><p>С вложениями сохраняй .itex — всё в одном файле; при сохранении .tex вложения записываются рядом.</p><p>Превью использует KaTeX, не весь TeX. Пакеты из преамбулы не выполняются. PDF — печать превью. Черновик в памяти; <kbd>Ctrl+S</kbd> сохраняет его.</p>
 </dialog>
 <script type="module" src="/src/app.js"></script></body></html>

@@ -1,7 +1,10 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('instant',{
   saveText:text=>ipcRenderer.invoke('save-text',text),
+  importResources:()=>ipcRenderer.invoke('import-resources'),
   openText:()=>ipcRenderer.invoke('open-text'),
+  detachFile:()=>ipcRenderer.invoke('file-detach'),
+  onFileEvent:fn=>ipcRenderer.on('file-event',(_event,data)=>fn(data)),
   confirmReplace:()=>ipcRenderer.invoke('confirm-replace'),
   setDirty:value=>ipcRenderer.send('dirty',value),
   exportDraft:payload=>ipcRenderer.invoke('export-draft',payload),
@@ -12,8 +15,12 @@ contextBridge.exposeInMainWorld('instant',{
   loadChats:()=>ipcRenderer.invoke('chats-load'),
   saveChats:value=>ipcRenderer.invoke('chats-save',value),
   aiConfig:()=>ipcRenderer.invoke('ai-config'),
+  setAIModel:model=>ipcRenderer.invoke('ai-model',model),
   setAIKey:key=>ipcRenderer.invoke('ai-key',key),
   askAI:payload=>ipcRenderer.invoke('ai-start',payload),
+  startWork:payload=>ipcRenderer.invoke('work-start',payload),
+  decideWork:payload=>ipcRenderer.invoke('work-decision',payload),
+  setWorkEnabled:(value,phrase)=>ipcRenderer.invoke('work-enable',value,phrase),
   cancelAI:id=>ipcRenderer.invoke('ai-cancel',id),
   copyText:text=>ipcRenderer.invoke('copy-text',text),
   onAIEvent:fn=>ipcRenderer.on('ai-event',(_event,data)=>fn(data)),

@@ -1,4 +1,6 @@
 import './style.css';
+import './document.css';
+import {ResourceStore,initResources} from './resources.js';
 import '@fontsource-variable/jetbrains-mono';
 import './interface.css';
 import {EditorState,Compartment} from '@codemirror/state';
@@ -12,15 +14,17 @@ import {documentTemplate,startPosition} from './template.js';
 import {CommandDictionary,completionSource,completionKeys} from './completion.js';
 import {mountIcons,icon} from './icons.js';
 import {initAI,previewSelection} from './ai-ui.js';
+import {initWorkReview} from './work-review.js';
+import {initFileSync} from './file-sync.js';
 
-const $=id=>document.getElementById(id),api=window.instant,renderer=new DraftRenderer();
+const $=id=>document.getElementById(id),api=window.instant,resources=new ResourceStore(),renderer=new DraftRenderer({resolveImage:name=>resources.image(name),getBibliography:name=>resources.bibliography(name)});
 mountIcons();
 let saved=[];try{saved=await api?.loadDictionary()||[];}catch{}
 let appearance={editorSize:14,editorWeight:670,previewSize:19,previewZoom:100,theme:'light'};
 try{appearance={...appearance,...await api?.loadAppearance()};}catch{}
 const dictionary=new CommandDictionary(saved,entries=>api?.saveDictionary(entries).catch(()=>toast('Не удалось сохранить словарь')));
 let frame=0,result,zoom=appearance.previewZoom,dirty=false,sourceName='Мой черновик',exporting=false;
-let selected=null;
+let selected=null,fileSync=null;
 const editorTheme=new Compartment();
 function themeExtension(){
   const dark=appearance.theme==='dark';
@@ -36,7 +40,7 @@ const editor=new EditorView({state:EditorState.create({doc:documentTemplate,sele
   keymap.of([{key:'Mod-s',run:()=>{save();return true;}},{key:'Mod-o',run:()=>{open();return true;}},{key:'Mod-n',run:()=>{newDraft();return true;}},{key:'Mod-Shift-f',run:()=>{toggleFocus();return true;}},...defaultKeymap,...historyKeymap,indentWithTab]),
   editorTheme.of(themeExtension()),
   EditorView.updateListener.of(update=>{
-    if(update.docChanged){setDirty(true);scheduleRender();}
+    if(update.docChanged){setDirty(true);scheduleRender();fileSync?.changed();}
     if(update.selectionSet||update.docChanged){updateCursor();queueMicrotask(editorSelection);}
   })
 ]}),parent:$('editor')});
@@ -66,27 +70,30 @@ function render(){
 setInterval(()=>dictionary.observe(editor.state.doc.toString(),!result?.issues.length),1000);
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function save(){
+  if(fileSync.blocked){toast('Сначала сравни внешние изменения');return;}
+  if(workReview.pending){toast('Прими или отклони правку');return;}
   if(!api){toast('Сохранение доступно в десктоп-приложении');return;}
-  const snapshot=editor.state.doc.toString();
-  try{const name=await api.saveText(snapshot);if(name){sourceName=name;setDirty(editor.state.doc.toString()!==snapshot);toast('Текст сохранён');}}catch(e){toast('Не удалось сохранить: '+e.message);}
+  const snapshot={text:editor.state.doc.toString(),assets:{...resources.assets}};
+  try{const response=await api.saveText({...snapshot,fileRevision:fileSync.revision});if(response){sourceName=typeof response==='string'?response:response.name;fileSync.bind(snapshot,response.watch);setDirty(editor.state.doc.toString()!==snapshot.text);toast('Текст сохранён');}}catch(e){toast('Не удалось сохранить: '+e.message);}
 }
-async function canReplace(){return !dirty||(api?api.confirmReplace():confirm('Заменить несохранённый текст?'));}
-function replaceDoc(text,name,anchor=0){
+async function canReplace(){if(workReview.pending){toast('Прими или отклони правку');return false;}return !dirty||(api?api.confirmReplace():confirm('Заменить несохранённый текст?'));}
+function replaceDoc(text,name,anchor=0,assets={}){resources.load(assets);renderer.invalidateAssets();
   renderer.previous=[];editor.dispatch({changes:{from:0,to:editor.state.doc.length,insert:text},selection:{anchor},scrollIntoView:true});sourceName=name;setDirty(false);editor.focus();$('selection-ai').hidden=true;
 }
-async function newDraft(){if(await canReplace())replaceDoc(documentTemplate,'Мой черновик',startPosition);}
+async function newDraft(){if(await canReplace()){await fileSync.detach();replaceDoc(documentTemplate,'Мой черновик',startPosition);}}
 async function open(){
   if(!api){toast('Открытие доступно в десктоп-приложении');return;}if(!await canReplace())return;
-  try{const file=await api.openText();if(file)replaceDoc(file.text,file.name);}catch(e){toast('Не удалось открыть: '+e.message);}
+  try{const file=await api.openText();if(file){replaceDoc(file.text,file.name,0,file.assets);fileSync.bind({text:file.text,assets:file.assets||{}},file.watch);}}catch(e){toast('Не удалось открыть: '+e.message);}
 }
 async function exportDraft(format){
+  if(workReview.pending){toast('Прими или отклони правку');return;}
   $('export-options').hidden=true;$('export-toggle').setAttribute('aria-expanded','false');
   if(!api){toast('Экспорт доступен в десктоп-приложении');return;}if(exporting)return;
   if(frame){cancelAnimationFrame(frame);frame=0;}render();
   if(result.issues.length){$('issues').hidden=false;toast('Сначала заверши формулы: экспорт не включает устаревшие блоки.');return;}
   if(!result.blocks.length){toast('Сначала напиши что-нибудь');return;}
   exporting=true;$('export-toggle').disabled=true;
-  try{const response=await api.exportDraft({format,html:result.blocks.map(b=>`<div class="render-block">${b.html}</div>`).join('')});if(response)toast(format==='clipboard'?'Картинка скопирована':`Готово: ${response}`);}
+  try{const response=await api.exportDraft({format,html:resources.exportHTML(result.blocks.map(b=>`<div class="render-block">${b.html}</div>`).join(''))});if(response)toast(format==='clipboard'?'Картинка скопирована':`Готово: ${response}`);}
   catch(e){toast('Не удалось экспортировать: '+e.message);}finally{exporting=false;$('export-toggle').disabled=false;}
 }
 function toggleFocus(){$('workspace').classList.toggle('preview-only');}
@@ -124,7 +131,10 @@ for(const [element,change] of [[$('editor'),direction=>setFontSize('editorSize',
 }
 applyAppearance(false);document.fonts.ready.then(()=>editor.requestMeasure());
 
-const aiUI=initAI({api,$,getContext:()=>editor.state.doc.toString(),toast});
+const workReview=initWorkReview({editor,api,$,toast,getDirty:()=>dirty,restoreDirty:setDirty,onSettled:()=>fileSync?.changed()});
+fileSync=initFileSync({api,$,editor,resources,renderer,scheduleRender,setDirty,toast,locked:()=>!!workReview.pending});
+initResources({editor,store:resources,$,api,toast,changed:()=>{renderer.invalidateAssets();scheduleRender();},locked:()=>!!workReview.pending});
+const aiUI=initAI({api,$,getContext:()=>editor.state.doc.toString(),getBibliographies:()=>Object.fromEntries(Object.entries(resources.assets).filter(([,a])=>a.mime==='application/x-bibtex').map(([name,a])=>[name,a.data])),toast,workReview});
 function selectionTooltip(selection,rect){
   selected={...selection,rect:{left:rect.left,right:rect.right??rect.left,top:rect.top,bottom:rect.bottom??rect.top}};
   $('selection-ai').hidden=false;$('selection-ai').style.left=Math.max(5,Math.min(innerWidth-100,rect.left))+'px';
@@ -144,7 +154,7 @@ $('selection-ai').onpointerdown=e=>e.preventDefault();
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('#selection-ai'))$('selection-ai').hidden=true;});
 $('selection-ai').onclick=()=>{if(selected)aiUI.open({...selected});$('selection-ai').hidden=true;};
 $('save').onclick=save;$('open').onclick=open;$('new').onclick=newDraft;
-$('example').onclick=async()=>{if(await canReplace()){replaceDoc(example,'Пример');setDirty(true);}};
+$('example').onclick=async()=>{if(await canReplace()){await fileSync.detach();replaceDoc(example,'Пример');setDirty(true);}};
 $('help').onclick=()=>$('help-dialog').showModal();$('close-help').onclick=()=>$('help-dialog').close();
 $('export-toggle').onclick=()=>{const open=$('export-options').hidden;$('export-options').hidden=!open;$('export-toggle').setAttribute('aria-expanded',String(open));};
 document.addEventListener('click',e=>{if(!e.target.closest('.export-menu')){$('export-options').hidden=true;$('export-toggle').setAttribute('aria-expanded','false');}});

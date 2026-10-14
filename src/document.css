@@ -1,0 +1,15 @@
+.tex-equation{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;position:relative;gap:12px}
+.tex-equation>div{min-width:0}.tex-equation .katex-display{margin:.4em 0}.tex-equation-number{font-variant-numeric:tabular-nums;white-space:nowrap}.tex-anchor{position:absolute;top:0}
+.tex-image{display:block;max-width:100%;height:auto;margin:12px auto;object-fit:contain}
+.tex-figure,.tex-table{margin:1.4em 0;text-align:center;break-inside:avoid}
+.tex-figure figcaption,.tex-table figcaption{font-size:.9em;line-height:1.5;margin:.7em 0}
+.tex-table-scroll{overflow-x:auto;max-width:100%}.tex-tabular{border-collapse:collapse;margin:1em auto;max-width:100%;font-size:.95em}
+.tex-tabular td{border:0;padding:.35em .7em;overflow-wrap:anywhere}.tex-tabular td .katex{white-space:nowrap}
+.tex-list{padding-left:1.8em;margin:.8em 0;text-align:left}.tex-list li{padding-left:.15em;margin:.3em 0}.tex-list li>p{margin:.2em 0!important}
+ol.tex-list ol{list-style-type:lower-alpha}ol.tex-list ol ol{list-style-type:lower-roman}
+dl.tex-list{padding-left:0}dl.tex-list dt{font-weight:bold}dl.tex-list dd{margin:0 0 .6em 1.5em}
+.tex-item-label{display:inline-block;margin-left:-1.4em;min-width:1.4em;background:var(--page,white)}
+.tex-bibliography ol{padding-left:2em;list-style-type:decimal}.tex-bibliography li{margin:.5em 0}.tex-bibliography li::marker{content:'[' counter(list-item) '] '}
+.tex-bibliography li>p{margin:.2em 0!important}.tex-reference{color:inherit;text-decoration:none}.tex-reference:hover{text-decoration:underline}
+.tex-url{overflow-wrap:anywhere}.tex-page-break{display:block}
+@media print{.tex-page-break{break-after:page}.tex-tabular{break-inside:auto}.tex-tabular tr{break-inside:avoid}.tex-image{max-height:240mm}.tex-table-scroll{overflow:visible}}

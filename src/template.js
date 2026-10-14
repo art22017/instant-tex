@@ -9,6 +9,7 @@ export const documentTemplate = String.raw`\documentclass[12pt,a4paper]{article}
 \usepackage[margin=2cm]{geometry}
 \usepackage{enumitem}
 \usepackage{microtype}
+\usepackage{booktabs,hyperref}
 
 \begin{document}
 

@@ -1,12 +1,16 @@
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const windowsKey=require('./windows-key.cjs');
+const {DEFAULT_MODEL,resolveModel}=require('./models.cjs');
 function preferences(app,safeStorage){
   const root=app.getPath('userData'),keyPath=path.join(root,'openrouter-key.bin'),dictPath=path.join(root,'commands.json');
   const appearancePath=path.join(root,'appearance.json');
   const chatsPath=path.join(root,'chats.json');
+  const featuresPath=path.join(root,'features.json');
+  let workEnabled=false,model=DEFAULT_MODEL;
   let chats=[],dictionary=[],appearance={editorSize:14,editorWeight:670,previewSize:19,previewZoom:100,theme:'light'},writeTimer,writeChain=Promise.resolve();
   const ready=Promise.all([
+    fs.readFile(featuresPath,'utf8').then(s=>{const value=JSON.parse(s);workEnabled=value.workEnabled===true;try{model=resolveModel(value.model).id;}catch{}}).catch(()=>{}),
     fs.readFile(dictPath,'utf8').then(s=>{dictionary=validate(JSON.parse(s));}).catch(()=>{}),
     fs.readFile(appearancePath,'utf8').then(s=>{appearance=validateAppearance(JSON.parse(s));}).catch(()=>{}),
     fs.readFile(chatsPath,'utf8').then(s=>{chats=validateChats(JSON.parse(s));}).catch(()=>{})
@@ -18,9 +22,9 @@ function preferences(app,safeStorage){
   function validateChats(value){
     if(!Array.isArray(value))throw new Error('Некорректная история');
     const list=value.slice(0,60).filter(c=>c&&typeof c.id==='string'&&Array.isArray(c.turns)).map(c=>({
-      id:c.id.slice(0,100),created:Number.isFinite(c.created)?c.created:Date.now(),
+      id:c.id.slice(0,100),created:Number.isFinite(c.created)?c.created:Date.now(),mode:c.mode==='work'?'work':'ask',
       selection:c.selection&&typeof c.selection.text==='string'?{type:c.selection.type==='preview'?'preview':'code',text:c.selection.text.slice(0,200000),html:String(c.selection.html||'').slice(0,24000)}:null,
-      turns:c.turns.slice(-50).filter(t=>typeof t?.question==='string'&&typeof t.answer==='string').map(t=>({question:t.question.slice(0,20000),answer:t.answer.slice(0,100000),status:String(t.status||'Готово').slice(0,500)}))
+      turns:c.turns.slice(-50).filter(t=>typeof t?.question==='string'&&typeof t.answer==='string').map(t=>({question:t.question.slice(0,20000),answer:t.answer.slice(0,100000),mode:t.mode==='work'?'work':'ask',finished:true,status:/работает|отвечает/.test(t.status||'')?'Прервано':String(t.status||'Готово').slice(0,500),...(Array.isArray(t.trace)?{trace:t.trace.filter(b=>['text','thinking','tool','error'].includes(b?.kind)).slice(0,300).map(b=>({id:String(b.id||'').slice(0,120),kind:b.kind,text:String(b.text||'').slice(0,100000),name:String(b.name||'').slice(0,100),args:String(b.args||'').slice(0,6000),result:String(b.result||'').slice(0,6000),status:b.status==='running'?'interrupted':String(b.status||'done').slice(0,30)}))}:{}),...(t.diff?{diff:{added:Math.max(0,Number(t.diff.added)||0),removed:Math.max(0,Number(t.diff.removed)||0),status:t.diff.status==='pending'?'interrupted':String(t.diff.status).slice(0,30)}}:{})}))
     }));
     while(JSON.stringify(list).length>20_000_000)list.pop();return list;
   }
@@ -47,10 +51,10 @@ function preferences(app,safeStorage){
     cachedKey=value;
   }
   function flush(){
-    clearTimeout(writeTimer);const snapshots=[[dictPath,JSON.stringify(dictionary)],[appearancePath,JSON.stringify(appearance)],[chatsPath,JSON.stringify(chats)]];
-    writeChain=writeChain.catch(()=>{}).then(async()=>{await fs.mkdir(root,{recursive:true});for(const [file,text] of snapshots){await fs.writeFile(file+'.tmp',text,'utf8');await fs.rename(file+'.tmp',file);}});return writeChain;
+    clearTimeout(writeTimer);const snapshots=[[dictPath,JSON.stringify(dictionary)],[appearancePath,JSON.stringify(appearance)],[chatsPath,JSON.stringify(chats)],[featuresPath,JSON.stringify({workEnabled,model})]];
+    writeChain=writeChain.catch(()=>{}).then(async()=>{await fs.mkdir(root,{recursive:true});for(const [file,text] of snapshots){await fs.writeFile(file+'.tmp',text,'utf8');for(let attempt=0;;attempt++){try{await fs.rename(file+'.tmp',file);break;}catch(error){if(attempt>=5||!['EPERM','EACCES','EBUSY'].includes(error.code))throw error;await new Promise(resolve=>setTimeout(resolve,25*2**attempt));}}}});return writeChain;
   }
   const schedule=()=>{clearTimeout(writeTimer);writeTimer=setTimeout(()=>flush().catch(()=>{}),300);};
-  return{ready,key,setKey,flush,getChats:async()=>{await ready;return chats;},saveChats(value){chats=validateChats(value);schedule();},getAppearance:async()=>{await ready;return appearance;},saveAppearance(value){appearance=validateAppearance(value);schedule();},getDictionary:async()=>{await ready;return dictionary;},saveDictionary(entries){dictionary=validate(entries);schedule();}};
+  return{ready,key,setKey,flush,getModel:async()=>{await ready;return model;},async setModel(value){await ready;model=resolveModel(value).id;await flush();return model;},getWorkEnabled:async()=>{await ready;return workEnabled;},async setWorkEnabled(value,phrase){await ready;if(value!==false&&phrase!=='я понимаю что я бездарь и ничему не научусь')throw new Error('Введи фразу полностью');workEnabled=value===true;await flush();return workEnabled;},getChats:async()=>{await ready;return chats;},saveChats(value){chats=validateChats(value);schedule();},getAppearance:async()=>{await ready;return appearance;},saveAppearance(value){appearance=validateAppearance(value);schedule();},getDictionary:async()=>{await ready;return dictionary;},saveDictionary(entries){dictionary=validate(entries);schedule();}};
 }
 module.exports={preferences};

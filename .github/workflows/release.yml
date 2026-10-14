@@ -18,14 +18,24 @@ jobs:
         include:
           - os: windows-latest
             platform: Windows
+            arch: x64
             targets: --win portable
             files: release/Instant-TeX-*-Windows.exe
           - os: ubuntu-latest
             platform: Linux
+            arch: x64
             targets: --linux AppImage
             files: release/*.AppImage
-          - os: macos-latest
-            platform: macOS
+          - os: macos-26-intel
+            platform: macOS Intel
+            arch: x64
+            targets: --mac dmg --mac zip
+            files: |
+              release/*.dmg
+              release/*.zip
+          - os: macos-26
+            platform: macOS Apple Silicon
+            arch: arm64
             targets: --mac dmg --mac zip
             files: |
               release/*.dmg
@@ -48,7 +58,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Create macOS app icon
-        if: matrix.platform == 'macOS'
+        if: startsWith(matrix.platform, 'macOS')
         shell: bash
         run: |
           mkdir -p assets/InstantTeX.iconset
@@ -60,7 +70,7 @@ jobs:
           iconutil -c icns assets/InstantTeX.iconset -o assets/icon.icns
       - name: Package application
         shell: bash
-        run: npx electron-builder ${{ matrix.targets }} --x64 --config.directories.output=release --publish never
+        run: npx electron-builder ${{ matrix.targets }} --${{ matrix.arch }} --config.directories.output=release --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: instant-tex-${{ matrix.platform }}
