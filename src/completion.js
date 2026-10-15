@@ -134,6 +134,25 @@ export function insideDisplay(source,pos){
   return stack.length>0;
 }
 
+export function insideMatrix(source,pos){
+  const before=source.slice(0,pos).split('\n').map(line=>line.replace(/(?<!\\)%.*$/,'')).join('\n');
+  const stack=[];
+  for(const m of before.matchAll(/\\(begin|end)\{([^}]+)\}/g)){
+    if(m[1]==='begin')stack.push(m[2]);
+    else if(stack.at(-1)===m[2])stack.pop();
+  }
+  return /^(?:[pbBvV]?matrix|smallmatrix|array)$/.test(stack.at(-1)||'');
+}
+
+export function matrixColumnSpace(view){
+  const range=view.state.selection.main;
+  if(!range.empty)return false;
+  const source=view.state.doc.toString(),line=view.state.doc.lineAt(range.head),prefix=source.slice(line.from,range.head);
+  if(/(?<!\\)%/.test(prefix)||!insideMatrix(source,range.head)||!/[0-9]$/.test(prefix))return false;
+  view.dispatch({changes:{from:range.head,insert:' & '},selection:{anchor:range.head+3},userEvent:'input.type'});
+  return true;
+}
+
 export function smartEnter(view){
   if(completionStatus(view.state)==='active'&&acceptCompletion(view))return true;
   const range=view.state.selection.main;
@@ -149,6 +168,7 @@ export function smartEnter(view){
 }
 export const completionKeys=Prec.highest(keymap.of([
   {key:'Ctrl-Space',run:startCompletion},{key:'Mod-Space',run:startCompletion},
+  {key:'Space',run:matrixColumnSpace},
   {key:'Tab',run:view=>completionStatus(view.state)==='active'&&acceptCompletion(view)},
   {key:'Enter',run:smartEnter},{key:'Shift-Enter',run:view=>{const r=view.state.selection.main;view.dispatch({changes:{from:r.from,to:r.to,insert:'\n'},selection:{anchor:r.from+1}});return true;}}
 ]));

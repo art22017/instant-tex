@@ -16,23 +16,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025
             platform: Windows
             arch: x64
-            targets: --win portable
-            files: release/Instant-TeX-*-Windows.exe
-          - os: ubuntu-latest
+            targets: --win nsis
+            files: release/Instant-TeX-*-Windows-Setup.exe
+          - os: ubuntu-24.04
             platform: Linux
             arch: x64
             targets: --linux AppImage
             files: release/*.AppImage
-          - os: macos-26-intel
-            platform: macOS Intel
-            arch: x64
-            targets: --mac dmg --mac zip
-            files: |
-              release/*.dmg
-              release/*.zip
           - os: macos-26
             platform: macOS Apple Silicon
             arch: arm64

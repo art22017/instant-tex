@@ -6,9 +6,9 @@
 
 Готовые сборки появляются на странице [Releases](https://github.com/art22017/instant-tex/releases):
 
-- **Windows x64:** portable `.exe`, установка не требуется.
+- **Windows x64:** пользовательский установщик `Setup.exe`; после установки приложение запускается напрямую.
 - **Linux x64:** AppImage.
-- **macOS Intel и Apple Silicon:** отдельные `.dmg` и `.zip` для x64 и arm64.
+- **macOS Apple Silicon:** `.dmg` и `.zip` для arm64.
 
 Сборки не подписаны сертификатами издателя. Windows или macOS могут показать предупреждение при первом запуске.
 
@@ -49,11 +49,11 @@ npm test
 npm run build
 ```
 
-`npm run dev` запускает только UI в браузере; диалоги сохранения и экспорта доступны в Electron. Windows portable-сборка из локальной среды создаётся командой `npm run package`.
+`npm run dev` запускает только UI в браузере; диалоги сохранения и экспорта доступны в Electron. Windows NSIS-установщик из локальной среды создаётся командой `npm run package`.
 
 ## Релизы
 
-Опубликуй версионный Git-тег, совпадающий с `package.json` (сейчас `v0.8.2`). GitHub Actions проверит версию, выполнит unit-тесты и соберёт приложение на GitHub runners для Windows x64, Ubuntu x64, macOS Intel x64 и macOS Apple Silicon arm64. Успешный запуск создаст GitHub Release и добавит Windows portable, Linux AppImage, а также macOS DMG и ZIP для обоих процессоров. Для сборки не требуются Actions secrets.
+Опубликуй версионный Git-тег, совпадающий с `package.json` (сейчас `v0.8.3`). GitHub Actions проверит версию, выполнит unit-тесты и соберёт приложение на GitHub runners для Windows x64, Ubuntu x64 и macOS Apple Silicon arm64. Успешный запуск создаст GitHub Release с Windows NSIS Setup, Linux AppImage и macOS DMG/ZIP. Для сборки не требуются Actions secrets.
 
 Технологии: Electron, CodeMirror 6, KaTeX, JetBrains Mono Variable, Computer Modern, Lucide.
 

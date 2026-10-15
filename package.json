@@ -1,6 +1,6 @@
 {
   "name": "instant-tex",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Local-first LaTeX scratchpad with instant math preview",
   "author": "Instant TeX",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "start": "npm run build && electron .",
     "test": "node --test tests/*.test.*",
     "test:desktop": "npm run build && node tests/desktop.mjs",
-    "package": "npm run build && electron-builder --win portable --x64 --publish never"
+    "package": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.0",
@@ -56,15 +56,16 @@
       "assets/icon.png"
     ],
     "win": {
-      "target": "portable",
+      "target": "nsis",
       "icon": "assets/icon.ico",
       "signExecutable": false
     },
     "mac": {
       "icon": "assets/icon.icns"
     },
-    "portable": {
-      "artifactName": "Instant-TeX-${version}-Windows.exe"
+    "nsis": {
+      "artifactName": "Instant-TeX-${version}-Windows-Setup.exe",
+      "perMachine": false
     }
   }
 }

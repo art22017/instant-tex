@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {builtins,CommandDictionary,extractCommands,insideDisplay,smartEnter,rankedCommands} from '../src/completion.js';
+import {builtins,CommandDictionary,extractCommands,insideDisplay,insideMatrix,matrixColumnSpace,smartEnter,rankedCommands} from '../src/completion.js';
 import {DraftRenderer} from '../src/render.js';
 import {documentTemplate,startPosition} from '../src/template.js';
 
@@ -32,6 +32,25 @@ test('learning needs a continuous minute without errors and survives edited docu
 test('math context distinguishes display delimiters, gather and plain text',()=>{
   for(const s of ['\\[x','$$x','\\begin{gather}x','\\begin{gather*}x'])assert.equal(insideDisplay(s,s.length),true);
   for(const s of ['\\[x\\]','$$x$$','\\(x','Текст'])assert.equal(insideDisplay(s,s.length),false);
+});
+test('matrix spaces after numbers become column separators only inside matrix rows',()=>{
+  for(const name of ['matrix','pmatrix','bmatrix','Bmatrix','vmatrix','Vmatrix','smallmatrix','array']){
+    const source=`\\begin{${name}}\n2`;
+    assert.equal(insideMatrix(source,source.length),true,name);
+    let transaction;
+    const view={state:{selection:{main:{empty:true,head:source.length}},doc:{toString:()=>source,lineAt:()=>({from:source.lastIndexOf('\n')+1,text:'2'})}},dispatch:t=>transaction=t};
+    assert.equal(matrixColumnSpace(view),true,name);
+    assert.equal(transaction.changes.insert,' & ',name);
+    assert.equal(transaction.selection.anchor,source.length+3,name);
+  }
+  const closed='\\begin{pmatrix}\n2\\end{pmatrix}';
+  assert.equal(insideMatrix(closed,closed.length),false);
+  for(const source of ['\\begin{gather}\n2','Текст 2','\\begin{pmatrix}\nx','\\begin{pmatrix}\n% comment 2','% \\begin{pmatrix}\n2']){
+    const head=source.length,line=source.slice(source.lastIndexOf('\n')+1);let transaction;
+    const view={state:{selection:{main:{empty:true,head}},doc:{toString:()=>source,lineAt:()=>({from:source.lastIndexOf('\n')+1,text:line})}},dispatch:t=>transaction=t};
+    assert.equal(matrixColumnSpace(view),false,source);
+    assert.equal(transaction,undefined,source);
+  }
 });
 test('Environment name opens begin first regardless of closing frequency; explicit end stays end',()=>{
   const items=builtins.map(e=>({...e,uses:e.name==='\\end{pmatrix}'?100000:0}));
