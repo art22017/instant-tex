@@ -144,11 +144,21 @@ export function insideMatrix(source,pos){
   return /^(?:[pbBvV]?matrix|smallmatrix|array)$/.test(stack.at(-1)||'');
 }
 
+export function insideTable(source,pos){
+  const before=source.slice(0,pos).split('\n').map(line=>line.replace(/(?<!\\)%.*$/,'')).join('\n');
+  const stack=[];
+  for(const m of before.matchAll(/\\(begin|end)\{([^}]+)\}/g)){
+    if(m[1]==='begin')stack.push(m[2]);
+    else if(stack.at(-1)===m[2])stack.pop();
+  }
+  return /^(?:tabular\*?|tabularx|longtable)$/.test(stack.at(-1)||'');
+}
+
 export function matrixColumnSpace(view){
   const range=view.state.selection.main;
   if(!range.empty)return false;
   const source=view.state.doc.toString(),line=view.state.doc.lineAt(range.head),prefix=source.slice(line.from,range.head);
-  if(/(?<!\\)%/.test(prefix)||!insideMatrix(source,range.head)||!/[0-9]$/.test(prefix))return false;
+  if(/(?<!\\)%/.test(prefix)||!(insideMatrix(source,range.head)||insideTable(source,range.head))||!/[0-9]$/.test(prefix))return false;
   view.dispatch({changes:{from:range.head,insert:' & '},selection:{anchor:range.head+3},userEvent:'input.type'});
   return true;
 }

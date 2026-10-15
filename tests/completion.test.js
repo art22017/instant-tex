@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {builtins,CommandDictionary,extractCommands,insideDisplay,insideMatrix,matrixColumnSpace,smartEnter,rankedCommands} from '../src/completion.js';
+import {builtins,CommandDictionary,extractCommands,insideDisplay,insideMatrix,insideTable,matrixColumnSpace,smartEnter,rankedCommands} from '../src/completion.js';
 import {DraftRenderer} from '../src/render.js';
 import {documentTemplate,startPosition} from '../src/template.js';
 
@@ -46,6 +46,25 @@ test('matrix spaces after numbers become column separators only inside matrix ro
   const closed='\\begin{pmatrix}\n2\\end{pmatrix}';
   assert.equal(insideMatrix(closed,closed.length),false);
   for(const source of ['\\begin{gather}\n2','Текст 2','\\begin{pmatrix}\nx','\\begin{pmatrix}\n% comment 2','% \\begin{pmatrix}\n2']){
+    const head=source.length,line=source.slice(source.lastIndexOf('\n')+1);let transaction;
+    const view={state:{selection:{main:{empty:true,head}},doc:{toString:()=>source,lineAt:()=>({from:source.lastIndexOf('\n')+1,text:line})}},dispatch:t=>transaction=t};
+    assert.equal(matrixColumnSpace(view),false,source);
+    assert.equal(transaction,undefined,source);
+  }
+});
+test('table spaces after numbers become column separators inside tabular rows',()=>{
+  for(const name of ['tabular','tabular*','tabularx','longtable']){
+    const source=`\\begin{${name}}{cc}\n2`;
+    assert.equal(insideTable(source,source.length),true,name);
+    let transaction;
+    const view={state:{selection:{main:{empty:true,head:source.length}},doc:{toString:()=>source,lineAt:()=>({from:source.lastIndexOf('\n')+1,text:'2'})}},dispatch:t=>transaction=t};
+    assert.equal(matrixColumnSpace(view),true,name);
+    assert.equal(transaction.changes.insert,' & ',name);
+    assert.equal(transaction.selection.anchor,source.length+3,name);
+  }
+  const closed='\\begin{tabular}{cc}\n2\\end{tabular}';
+  assert.equal(insideTable(closed,closed.length),false);
+  for(const source of ['\\begin{table}\n2','\\begin{tabular}{cc}\n% 2','\\begin{tabular}{cc}\nx']){
     const head=source.length,line=source.slice(source.lastIndexOf('\n')+1);let transaction;
     const view={state:{selection:{main:{empty:true,head}},doc:{toString:()=>source,lineAt:()=>({from:source.lastIndexOf('\n')+1,text:line})}},dispatch:t=>transaction=t};
     assert.equal(matrixColumnSpace(view),false,source);
