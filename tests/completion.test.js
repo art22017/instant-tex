@@ -84,4 +84,7 @@ test('smart Enter adds one line break, not duplicates or breaks after opening de
   assert.equal(apply('\\[\nx=1'),' \\\\\n');
   assert.equal(apply('$$\nx=1 \\\\'),'\n');
   assert.equal(apply('\\begin{gather}'),'\n');
+  assert.equal(apply('\\begin{tabular}{cc}\n2 & 3'),' \\\\\n');
+  assert.equal(apply('\\begin{tabularx}{\\textwidth}{cc}\n2 & 3'),' \\\\\n');
+  assert.equal(apply('\\begin{table}\n2 & 3'),undefined);
 });

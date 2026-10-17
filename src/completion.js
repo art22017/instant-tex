@@ -125,7 +125,7 @@ export function completionSource(dictionary){
 export function insideDisplay(source,pos){
   const before=source.slice(0,pos).replace(/(?<!\\)%[^\n]*/g,'');
   const stack=[];
-  const re=/\\\[|\\\]|(?<!\\)\$\$|\\(begin|end)\{(gather\*?|align\*?|aligned|gathered|equation\*?|cases|[pbvBV]?matrix|split)\}/g;
+  const re=/\\\[|\\\]|(?<!\\)\$\$|\\(begin|end)\{(gather\*?|align\*?|aligned|gathered|equation\*?|cases|[pbvBV]?matrix|smallmatrix|array|tabular\*?|tabularx|longtable|split)\}/g;
   for(const m of before.matchAll(re)){
     if(m[0]==='\\[')stack.push('bracket');else if(m[0]==='\\]'){if(stack.at(-1)==='bracket')stack.pop();}
     else if(m[0]==='$$'){if(stack.at(-1)==='dollar')stack.pop();else stack.push('dollar');}
