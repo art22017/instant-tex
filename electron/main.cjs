@@ -47,8 +47,9 @@ ipcMain.handle('confirm-replace',async event=>{
 });
 ipcMain.handle('save-text',async(event,value)=>{
   checkSender(event);const doc=validateDocument(value),hasAssets=Object.keys(doc.assets).length>0;
-  const {canceled,filePath}=await dialog.showSaveDialog(main,{title:'Сохранить черновик',defaultPath:lastPath||('Черновик.'+(hasAssets?'itex':'tex')),filters:hasAssets?[{name:'Instant TeX · текст и вложения',extensions:['itex']},{name:'LaTeX · вложения рядом с .tex',extensions:['tex']}]:[{name:'LaTeX / текст UTF-8',extensions:['tex','txt']},{name:'Instant TeX',extensions:['itex']}]});
-  if(canceled||!filePath)return null;await fileWatch.guard(filePath,value?.fileRevision);const resume=fileWatch.pause(filePath);try{await saveDocument(filePath,doc,()=>fileWatch.guard(filePath,value?.fileRevision));lastPath=filePath;return{name:path.basename(filePath),watch:await fileWatch.saved(filePath)};}finally{resume();}
+  let filePath=lastPath;
+  if(!filePath){const result=await dialog.showSaveDialog(main,{title:'Сохранить черновик',defaultPath:'Черновик.'+(hasAssets?'itex':'tex'),filters:hasAssets?[{name:'Instant TeX · текст и вложения',extensions:['itex']},{name:'LaTeX · вложения рядом с .tex',extensions:['tex']}]:[{name:'LaTeX / текст UTF-8',extensions:['tex','txt']},{name:'Instant TeX',extensions:['itex']}]});if(result.canceled||!result.filePath)return null;filePath=result.filePath;}
+  await fileWatch.guard(filePath,value?.fileRevision);const resume=fileWatch.pause(filePath);try{await saveDocument(filePath,doc,()=>fileWatch.guard(filePath,value?.fileRevision));lastPath=filePath;return{name:path.basename(filePath),watch:await fileWatch.saved(filePath)};}finally{resume();}
 });
 ipcMain.handle('open-text',async event=>{
   checkSender(event);const {canceled,filePaths}=await dialog.showOpenDialog(main,{title:'Открыть документ',properties:['openFile'],filters:[{name:'Instant TeX / LaTeX / текст',extensions:['itex','tex','txt','md']}]});

@@ -176,9 +176,22 @@ export function smartEnter(view){
   view.dispatch({changes:{from:range.head,insert:text},selection:{anchor:range.head+text.length},userEvent:'input'});
   return true;
 }
+
+export function duplicatePreviousLine(view){
+  const range=view.state.selection.main;
+  if(!range.empty)return false;
+  const line=view.state.doc.lineAt(range.head),indent=/^[\t ]*/.exec(line.text)[0];
+  if(line.text!==indent||line.number===1)return false;
+  const previous=view.state.doc.line(line.number-1),previousIndent=/^[\t ]*/.exec(previous.text)[0];
+  const next=(indent||previousIndent)+previous.text.slice(previousIndent.length);
+  view.dispatch({changes:{from:line.from,to:line.to,insert:next},selection:{anchor:line.from+next.length},userEvent:'input'});
+  return true;
+}
+
 export const completionKeys=Prec.highest(keymap.of([
   {key:'Ctrl-Space',run:startCompletion},{key:'Mod-Space',run:startCompletion},
   {key:'Space',run:matrixColumnSpace},
+  {key:'Mod-d',run:duplicatePreviousLine},
   {key:'Tab',run:view=>completionStatus(view.state)==='active'&&acceptCompletion(view)},
   {key:'Enter',run:smartEnter},{key:'Shift-Enter',run:view=>{const r=view.state.selection.main;view.dispatch({changes:{from:r.from,to:r.to,insert:'\n'},selection:{anchor:r.from+1}});return true;}}
 ]));

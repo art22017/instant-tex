@@ -19,6 +19,8 @@ try{
   assert.ok(await page.locator('#rendered').innerText().then(t=>t.includes('Задача')));
   assert.equal(await page.locator('.toolbar').evaluate(e=>e.getBoundingClientRect().height),36);
   assert.ok(await page.locator('#paper').evaluate(e=>getComputedStyle(e).fontFamily.includes('CMU Serif')));
+  await page.evaluate(()=>{const e=window.instantDebug.editor,s='\\begin{gather}\n\t2\n\t';e.dispatch({changes:{from:0,to:e.state.doc.length,insert:s},selection:{anchor:s.length}});e.focus();});
+  await page.keyboard.press('Control+d');assert.equal(await page.evaluate(()=>window.instantDebug.editor.state.doc.toString()),'\\begin{gather}\n\t2\n\t2');
   await page.locator('#editor .cm-content').click();
   await page.keyboard.press('Control+Space');
   await page.locator('.cm-tooltip-autocomplete').waitFor();await page.keyboard.press('Escape');

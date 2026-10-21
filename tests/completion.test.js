@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {builtins,CommandDictionary,extractCommands,insideDisplay,insideMatrix,insideTable,matrixColumnSpace,smartEnter,rankedCommands} from '../src/completion.js';
+import {builtins,CommandDictionary,extractCommands,insideDisplay,insideMatrix,insideTable,matrixColumnSpace,smartEnter,duplicatePreviousLine,rankedCommands} from '../src/completion.js';
 import {DraftRenderer} from '../src/render.js';
 import {documentTemplate,startPosition} from '../src/template.js';
 
@@ -87,4 +87,9 @@ test('smart Enter adds one line break, not duplicates or breaks after opening de
   assert.equal(apply('\\begin{tabular}{cc}\n2 & 3'),' \\\\\n');
   assert.equal(apply('\\begin{tabularx}{\\textwidth}{cc}\n2 & 3'),' \\\\\n');
   assert.equal(apply('\\begin{table}\n2 & 3'),undefined);
+});
+test('Ctrl+D fills a blank or indentation-only line from the previous line without doubling indentation',()=>{
+  function apply(source,cursor=source.length){let transaction;const lines=source.split('\n');const starts=[];let offset=0;for(const [index,text]of lines.entries()){starts.push({number:index+1,from:offset,to:offset+text.length,text});offset+=text.length+1;}const doc={lineAt:pos=>starts.find(line=>pos>=line.from&&pos<=line.to),line:number=>starts[number-1]};const view={state:{selection:{main:{empty:true,head:cursor}},doc},dispatch:t=>transaction=t};const handled=duplicatePreviousLine(view);return{handled,transaction};}
+  for(const [source,expected] of [['\t  x\n\t','\tx'],['\t  x\n','\t  x'],['  x\n\t','\tx']]){const{handled,transaction}=apply(source);assert.equal(handled,true);assert.equal(transaction.changes.insert,expected);assert.equal(transaction.selection.anchor,source.lastIndexOf('\n')+1+expected.length);}
+  assert.equal(apply('x\nnot blank').handled,false);assert.equal(apply('only one line').handled,false);
 });

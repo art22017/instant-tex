@@ -7,7 +7,7 @@ const root=path.resolve('test-results/sync-ui');await fs.mkdir(root,{recursive:t
 const app=await electron.launch({executablePath:env.INSTANT_EXE,args:env.INSTANT_EXE?[]:['.'],env});const errors=[];
 try{
   const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.waitForFunction(()=>window.instantDebug?.editor);
-  await app.evaluate(({dialog,ipcMain},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showSaveDialog=async()=>({canceled:false,filePath:file});dialog.showMessageBox=async()=>({response:1});
+  await app.evaluate(({dialog,ipcMain},file)=>{globalThis.saveDialogCalls=0;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showSaveDialog=async()=>{globalThis.saveDialogCalls++;return{canceled:false,filePath:file};};dialog.showMessageBox=async()=>({response:1});
     for(const name of ['ai-config','chats-load','chats-save','ai-start','ai-cancel','work-start','work-decision'])ipcMain.removeHandler(name);
     ipcMain.handle('ai-config',()=>({hasKey:true,workEnabled:true}));ipcMain.handle('chats-load',()=>[]);ipcMain.handle('chats-save',()=>true);
     ipcMain.handle('ai-start',(event,payload)=>{globalThis.syncJob={event,payload};setTimeout(()=>event.sender.send('ai-event',{id:payload.id,type:'chunk',text:'Ответ'}),10);return true;});
@@ -25,7 +25,7 @@ try{
   await edit('ПЕРВЫЙ\nВТОРОЙ\nМоя версия\nМой новый текст\n');await fs.writeFile(file,'ПЕРВЫЙ\nВТОРОЙ\nВнешняя версия\n');await page.locator('#file-sync-review').waitFor({state:'visible'});
   assert.ok((await source()).includes('Моя версия'));await page.locator('#file-sync-review').click();await page.locator('#file-conflicts').waitFor({state:'visible'});
   await page.locator('#file-conflict-items input[value="remote"]').check();await page.locator('#file-conflicts-apply').click();assert.equal(await source(),'ПЕРВЫЙ\nВТОРОЙ\nВнешняя версия\nМой новый текст\n');
-  await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('toast').textContent==='Текст сохранён');assert.equal(await fs.readFile(file,'utf8'),await source());
+  await page.keyboard.press('Control+s');await page.waitForFunction(()=>document.getElementById('toast').textContent==='Текст сохранён');assert.equal(await fs.readFile(file,'utf8'),await source());assert.equal(await app.evaluate(()=>globalThis.saveDialogCalls),0);
   const replacement=path.join(root,'atomic.tmp');await fs.writeFile(replacement,'После атомарной замены\n');await fs.rename(replacement,file);await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString()==='После атомарной замены\n');
   // UI edits after a remote update must stay intact on the next external write.
   await edit('После атомарной замены\nНабрано после\n');await fs.writeFile(file,'Внешнее изменение\n');await page.waitForFunction(()=>window.instantDebug.editor.state.doc.toString()==='Внешнее изменение\nНабрано после\n');
