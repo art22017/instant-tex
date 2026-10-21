@@ -48,15 +48,14 @@ export class DraftRenderer{
   invalidateAssets(){this.assetVersion++;this.bibCache.clear();}
   formula(tex,display){const key=(display?'d:':'i:')+tex;let html=this.mathCache.get(key);if(html===undefined){html=katex.renderToString(tex,{displayMode:display,throwOnError:true,strict:'ignore',trust:false,output:'htmlAndMathml',maxExpand:500,maxSize:20});this.mathCache.set(key,html);}return html;}
   plan(blocks){
-    const refs=new Map(),citations=new Map(),counts={equation:0,figure:0,table:0},sections=[0,0,0];let lastNumber='';
+    const refs=new Map(),citations=new Map(),counts={figure:0,table:0},sections=[0,0,0];let lastNumber='';
     const remember=(key,number)=>{if(refs.has(key))throw new Error(`Повторная метка: ${key}`);refs.set(key,String(number));};
     const visit=(list,listPath=[])=>{for(const b of list){
       b.ids=[];
       if(b.kind==='heading'&&!b.star){sections[b.level-1]++;for(let i=b.level;i<3;i++)sections[i]=0;b.number=sections.slice(0,b.level).join('.');lastNumber=b.number;}
       if(b.kind==='math'){
-        const numbered=!!b.env&&!b.env.endsWith('*')&&b.env!=='aligned';
         const rows=/^(align|gather|flalign)/.test(b.env)?splitTop(b.raw,'\\\\'):[b.raw];b.rows=[];
-        for(let row of rows){if(!row.trim())continue;const ids=[];row=stripCommand(row,'label',v=>ids.push(v));let tag;row=stripCommand(row,'tag',v=>tag=v);const skip=/\\(?:notag|nonumber)\b/.test(row);row=row.replace(/\\(?:notag|nonumber)\b/g,'');const number=tag??(numbered&&!skip?String(++counts.equation):'');for(const id of ids)remember(id,number||lastNumber);b.rows.push({tex:row.trim(),number,ids});if(number)lastNumber=number;}
+        for(let row of rows){if(!row.trim())continue;const ids=[];row=stripCommand(row,'label',v=>ids.push(v));let tag;row=stripCommand(row,'tag',v=>tag=v);row=row.replace(/\\(?:notag|nonumber)\b/g,'');const number=tag??'';for(const id of ids)if(number)remember(id,number);b.rows.push({tex:row.trim(),number,ids});if(number)lastNumber=number;}
         b.numbered=b.rows.some(r=>r.number);continue;
       }
       if(b.kind==='figure'||b.kind==='table'){b.number=b.caption!==undefined?String(++counts[b.kind]):lastNumber;lastNumber=b.number;for(const id of b.labels||[]){remember(id,b.number);b.ids.push(id);}visit(b.children,listPath);continue;}

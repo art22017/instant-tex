@@ -21,7 +21,7 @@ try{
   assert.ok(await page.evaluate(()=>{const s=window.instantDebug.editor.state.doc.toString();return s.indexOf('\\begin{figure}')>s.indexOf('\\end{gather*}')&&s.indexOf('\\bibliography{refs}')<s.indexOf('\\end{document}');}));
   const lab=await fs.readFile('examples/lab.tex','utf8');await page.evaluate(source=>{const e=window.instantDebug.editor;e.dispatch({changes:{from:0,to:e.state.doc.length,insert:source},selection:{anchor:0}});},lab.replace('\\end{document}','\nДополнительно: \\cite{paper}.\n\\bibliography{refs}\n\\end{document}'));
   await page.waitForFunction(()=>document.querySelector('#rendered .tex-tabular')&&window.instantDebug.result.issues.length===0);
-  assert.equal(await page.locator('#rendered .tex-image').evaluate(e=>e.complete&&e.naturalWidth),800);assert.equal(await page.locator('#rendered .tex-equation-number').count(),4);
+  assert.equal(await page.locator('#rendered .tex-image').evaluate(e=>e.complete&&e.naturalWidth),800);assert.equal(await page.locator('#rendered .tex-equation-number').count(),2);
   assert.equal(await page.locator('#rendered .tex-tabular tr').count(),3);
   await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('сохранён'));
   const saved=JSON.parse(await fs.readFile(path.join(root,'lab.itex'),'utf8'));assert.equal(saved.assets['plot.png'].data,png);assert.ok(saved.assets['refs.bib']);assert.ok(!saved.text.includes('base64'));

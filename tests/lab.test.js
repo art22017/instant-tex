@@ -7,14 +7,16 @@ import fs from 'node:fs';
 const lab=fs.readFileSync(new URL('../examples/lab.tex',import.meta.url),'utf8');
 test('lab supports images, captions, nested lists, tables, bibliography and forward references',()=>{
   const r=new DraftRenderer({resolveImage:name=>name==='plot.png'?image:null}).render(lab);assert.deepEqual(r.issues,[]);
-  const html=r.blocks.map(b=>b.html).join('');assert.match(html,/<img class="tex-image"/);assert.match(html,/width:80%/);assert.match(html,/Рисунок 1/);assert.match(html,/Таблица 1/);assert.match(html,/colspan="2"/);assert.match(html,/<ol class="tex-list">/);assert.match(html,/<ul class="tex-list">/);assert.match(html,/tex-equation-number">\(3\)/);assert.doesNotMatch(html,/tex-equation-number">\(4\)/);assert.match(html,/>2\.1<\/a>/);assert.match(html,/Список литературы/);assert.doesNotMatch(html,/\?\?/);
+  const html=r.blocks.map(b=>b.html).join('');assert.match(html,/<img class="tex-image"/);assert.match(html,/width:80%/);assert.match(html,/Рисунок 1/);assert.match(html,/Таблица 1/);assert.match(html,/colspan="2"/);assert.match(html,/<ol class="tex-list">/);assert.match(html,/<ul class="tex-list">/);assert.match(html,/tex-equation-number">\(1\)/);assert.match(html,/tex-equation-number">\(2\)/);assert.doesNotMatch(html,/tex-equation-number">\(3\)/);assert.match(html,/>2\.1<\/a>/);assert.match(html,/Список литературы/);assert.doesNotMatch(html,/\?\?/);
 });
-test('renumbering propagates to earlier references and unchanged equations reuse KaTeX',()=>{
+test('equations stay unnumbered unless tagged; explicit tags resolve references and unchanged math reuses KaTeX',()=>{
   const renderer=new DraftRenderer();const source=String.raw`См. \eqref{e}.
-\begin{equation}x=1\label{e}\end{equation}`;
+\begin{equation}x=1\tag{A}\label{e}\end{equation}`;
   const a=renderer.render(source);assert.deepEqual(a.issues,[]);const size=renderer.mathCache.size;
   renderer.render(source.replace('См.','Смотри'));assert.equal(renderer.mathCache.size,size);
-  const b=renderer.render(source.replace('\\begin{equation}',String.raw`\begin{equation}y=2\end{equation}\begin{equation}`));assert.match(b.blocks[0].html,/>\(2\)<\/a>/);
+  const b=renderer.render(source.replace('См.',String.raw`\[y=2\]
+См.`)),bHtml=b.blocks.map(block=>block.html).join('');assert.match(bHtml,/>\(A\)<\/a>/);assert.equal((bHtml.match(/tex-equation-number/g)||[]).length,1);
+  for(const formula of [String.raw`\begin{equation}x=1\label{e}\end{equation}`,String.raw`\begin{align}x&=1\\y&=2\end{align}`,String.raw`\begin{gather}x=1\\y=2\end{gather}`]){const unnumbered=renderer.render(formula);assert.deepEqual(unnumbered.issues,[]);assert.doesNotMatch(unnumbered.blocks.map(block=>block.html).join(''),/tex-equation-number/);}
 });
 test('table borders follow column rules and horizontal commands; inline section labels work',()=>{
   const renderer=new DraftRenderer();
