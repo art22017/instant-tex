@@ -12,7 +12,7 @@ test('native events survive atomic replacement, idle is silent, save guard rejec
 });
 test('invalid partial itex and temporary removal retain document and recover on next write',async()=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'instant-watch-')),file=path.join(root,'note.itex'),events=[],watcher=new FileWatch(e=>events.push(e)),doc={format:'instant-tex',version:1,text:'first',assets:{}};
-  try{await fs.writeFile(file,JSON.stringify(doc));watcher.start(file,doc);await wait(50);await fs.writeFile(file,'{');await wait(230);assert.ok(events.some(e=>e.type==='error'));assert.ok(!events.some(e=>e.type==='changed'));
+  try{await fs.writeFile(file,JSON.stringify(doc));watcher.start(file,doc);await wait(50);await fs.writeFile(file,'{');await until(()=>events.some(e=>e.type==='error'));assert.ok(!events.some(e=>e.type==='changed'));
     await fs.unlink(file);await wait(40);await fs.writeFile(file,JSON.stringify({...doc,text:'recovered'}));await until(()=>events.some(e=>e.text==='recovered'));
   }finally{watcher.stop();for(const name of await fs.readdir(root))await fs.unlink(path.join(root,name));await fs.rmdir(root);}
 });

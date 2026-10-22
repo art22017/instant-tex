@@ -1,6 +1,6 @@
 {
   "name": "instant-tex",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "description": "Local-first LaTeX scratchpad with instant math preview",
   "author": "Instant TeX",
   "license": "MIT",
