@@ -25,7 +25,7 @@ function safeWindow(options={}){
 }
 async function createWindow(){
   Menu.setApplicationMenu(null);
-  main=safeWindow({width:1420,height:1000,minWidth:900,minHeight:600,backgroundColor:'#eef1ed',title:'Instant TeX',icon:path.join(__dirname,'../assets/icon.png'),show:false});
+  main=safeWindow({width:1420,height:1000,minWidth:900,minHeight:600,backgroundColor:'#eef1ed',title:'Instant TeX',icon:path.join(__dirname,'../assets/icon.ico'),show:false});
   main.webContents.setZoomFactor(1);
   await main.loadFile(path.join(__dirname,'../dist/index.html'));
   main.show();

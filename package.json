@@ -53,7 +53,8 @@
       "src/tex-structure.js",
       "package.json",
       "LICENSE",
-      "assets/icon.png"
+      "assets/icon.png",
+      "assets/icon.ico"
     ],
     "win": {
       "target": "nsis",
