@@ -16,6 +16,7 @@ import {mountIcons,icon} from './icons.js';
 import {initAI,previewSelection} from './ai-ui.js';
 import {initWorkReview} from './work-review.js';
 import {initFileSync} from './file-sync.js';
+import {localAutocomplete} from './local-autocomplete.js';
 
 const $=id=>document.getElementById(id),api=window.instant,resources=new ResourceStore(),renderer=new DraftRenderer({resolveImage:name=>resources.image(name),getBibliography:name=>resources.bibliography(name)});
 mountIcons();
@@ -23,6 +24,7 @@ let saved=[];try{saved=await api?.loadDictionary()||[];}catch{}
 let appearance={editorSize:14,editorWeight:670,previewSize:19,previewZoom:100,theme:'light'};
 try{appearance={...appearance,...await api?.loadAppearance()};}catch{}
 const dictionary=new CommandDictionary(saved,entries=>api?.saveDictionary(entries).catch(()=>toast('Не удалось сохранить словарь')));
+const autocomplete=localAutocomplete({api,toast});
 let frame=0,result,zoom=appearance.previewZoom,dirty=false,sourceName='Мой черновик',exporting=false;
 let selected=null,fileSync=null;
 const editorTheme=new Compartment();
@@ -36,6 +38,7 @@ const tex=StreamLanguage.define({token(stream){
 }});
 const editor=new EditorView({state:EditorState.create({doc:documentTemplate,selection:{anchor:startPosition},extensions:[
   lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),drawSelection(),history(),EditorView.lineWrapping,tex,
+  autocomplete.extension,
   autocompletion({override:[completionSource(dictionary)],activateOnTyping:true,maxRenderedOptions:100,interactionDelay:0,icons:false}),completionKeys,
   keymap.of([{key:'Mod-s',run:()=>{save();return true;}},{key:'Mod-o',run:()=>{open();return true;}},{key:'Mod-n',run:()=>{newDraft();return true;}},{key:'Mod-Shift-f',run:()=>{toggleFocus();return true;}},...defaultKeymap,...historyKeymap,indentWithTab]),
   editorTheme.of(themeExtension()),
@@ -132,6 +135,7 @@ for(const [element,change] of [[$('editor'),direction=>setFontSize('editorSize',
 applyAppearance(false);document.fonts.ready.then(()=>editor.requestMeasure());
 
 const workReview=initWorkReview({editor,api,$,toast,getDirty:()=>dirty,restoreDirty:setDirty,onSettled:()=>fileSync?.changed()});
+autocomplete.mount(editor,{locked:()=>!!workReview.pending||!!fileSync?.blocked});
 fileSync=initFileSync({api,$,editor,resources,renderer,scheduleRender,setDirty,toast,locked:()=>!!workReview.pending});
 initResources({editor,store:resources,$,api,toast,changed:()=>{renderer.invalidateAssets();scheduleRender();},locked:()=>!!workReview.pending});
 const aiUI=initAI({api,$,getContext:()=>editor.state.doc.toString(),getBibliographies:()=>Object.fromEntries(Object.entries(resources.assets).filter(([,a])=>a.mime==='application/x-bibtex').map(([name,a])=>[name,a.data])),toast,workReview});

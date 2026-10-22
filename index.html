@@ -24,6 +24,7 @@
     </div>
   </div>
   <span id="cursor"></span>
+  <button id="autocomplete-toggle" type="button" hidden aria-label="Настройки Autocomplete" title="Локальное автодополнение">Autocomplete</button>
   <button id="theme-toggle" data-icon="moon" title="Тёмная тема" aria-label="Переключить тему"></button>
 </header>
 <main id="workspace"><section class="source-panel"><div id="editor"></div><div id="work-review" hidden><span>Edited</span><span id="work-counts"></span><button id="work-accept" data-icon="check" title="Принять правку" aria-label="Принять правку"></button><button id="work-reject" data-icon="close" title="Отклонить правку" aria-label="Отклонить правку"></button></div></section>
@@ -47,6 +48,19 @@
 </aside>
 <div id="ai-model-menu" role="listbox" aria-label="Модель AI" hidden></div>
 <div id="toast" role="status" hidden></div>
+<dialog id="autocomplete-dialog" aria-labelledby="autocomplete-heading">
+  <div class="dialog-heading"><h2 id="autocomplete-heading">Autocomplete</h2><button id="autocomplete-close" data-icon="close" aria-label="Закрыть Autocomplete"></button></div>
+  <p>Локальные подсказки от Qwen2.5-Coder 1.5B Base. Текст остаётся на компьютере.</p>
+  <label for="autocomplete-device">Где запускать<select id="autocomplete-device"><option value="gpu">Intel Arc GPU</option><option value="cpu">Intel CPU</option><option value="npu">Intel NPU</option></select></label>
+  <small>Чтобы сменить устройство, сначала останови модель.</small>
+  <label for="autocomplete-length">Максимальная длина подсказки<input id="autocomplete-length" type="number" min="8" max="128" step="1" value="32"></label>
+  <small>От 8 до 128 токенов. Токен — часть слова или символ; 32 обычно хватает для короткого продолжения.</small>
+  <div class="autocomplete-actions"><button id="autocomplete-start" type="button">Включить</button><button id="autocomplete-stop" type="button" disabled>Остановить</button></div>
+  <div id="autocomplete-state" role="status">Модель выключена</div><div id="autocomplete-load-time"></div><div id="autocomplete-detail"></div>
+  <p><kbd>Tab</kbd> — принять серую подсказку · <kbd>Esc</kbd> — скрыть · <kbd>Alt + \</kbd> — запросить.</p>
+  <small>Модель и программы для её запуска устанавливаются отдельно и не входят в установщик.</small>
+  <div id="autocomplete-path"></div><button id="autocomplete-folder" type="button">Открыть папку модели</button>
+</dialog>
 <div id="file-sync" hidden><span id="file-sync-message"></span><button id="file-sync-review" type="button">Сравнить</button></div>
 <dialog id="file-conflicts"><div class="dialog-heading"><h2>Изменения файла</h2><button id="file-conflicts-close" data-icon="close" aria-label="Закрыть сравнение"></button></div><p>Независимые правки объединятся автоматически. Выбери вариант только для пересекающихся изменений. Файл на диске изменится после сохранения.</p><div id="file-conflict-items"></div><button id="file-conflicts-apply" type="button">Применить выбор</button></dialog>
 <dialog id="work-settings-dialog"><div class="dialog-heading"><h2 id="work-enabled-state">Work отключён</h2><button id="work-settings-close" data-icon="close" aria-label="Закрыть настройки"></button></div><button id="work-disable" type="button" hidden>Отключить Work</button><form id="work-enable-form"><p>Чтобы включить Work, введи вручную:</p><p class="work-enable-phrase">я понимаю что я бездарь и ничему не научусь</p><input id="work-phrase" type="text" autocomplete="off" spellcheck="false" aria-label="Фраза для включения Work" required><button type="submit">Включить Work</button></form></dialog>

@@ -1,0 +1,19 @@
+#autocomplete-toggle{width:auto;padding:0 9px;font-size:11px;gap:6px;margin-left:4px}
+#autocomplete-toggle::before{content:'';width:5px;height:5px;background:#8b958d;border-radius:50%}
+#autocomplete-toggle.active::before{background:#5c9c71}
+#autocomplete-dialog{max-width:520px}
+#autocomplete-dialog label{display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:12px;margin:18px 0}
+#autocomplete-dialog select,#autocomplete-dialog input{font:inherit;color:inherit;background:var(--local-input,#fff);border:1px solid #889b8c66;padding:8px;border-radius:5px}
+#autocomplete-dialog select{width:235px;max-width:62%}
+#autocomplete-dialog input{width:80px}
+#autocomplete-dialog small{display:block;font-size:11px;line-height:1.8;color:#7c9081}
+.autocomplete-actions{display:flex;gap:8px;margin:18px 0}
+.autocomplete-actions button,#autocomplete-folder{width:auto;height:32px;border:1px solid #889b8c66;padding:0 12px;font-size:12px}
+#autocomplete-start{background:#527d63;color:#fff}
+#autocomplete-state{font-size:12px;line-height:1.7;margin:8px 0}
+#autocomplete-state.error{color:#c36c5a}
+#autocomplete-detail,#autocomplete-load-time{font-size:11px;color:#7c9081;line-height:1.8;min-height:1.8em}
+#autocomplete-path{font-size:10px;overflow-wrap:anywhere;margin:10px 0;color:#7c9081}
+.cm-local-ghost{color:#89948c;opacity:.8;font-style:italic;font-weight:400;white-space:pre-wrap;pointer-events:none;user-select:none}
+[data-theme=dark] #autocomplete-dialog{background:#25312a;color:#d1ddd3;--local-input:#1f2923;border-color:#465b4c}
+[data-theme=dark] #autocomplete-dialog button:hover{background:#3b4d40}

@@ -1,6 +1,6 @@
 {
   "name": "instant-tex",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "description": "Local-first LaTeX scratchpad with instant math preview",
   "author": "Instant TeX",
   "license": "MIT",
@@ -41,7 +41,7 @@
   },
   "build": {
     "compression": "normal",
-    "appId": "local.instanttex.scratchpad",
+    "appId": "local.instanttex.scratchpad.v2",
     "productName": "Instant TeX",
     "directories": {
       "output": "release-v14"
@@ -54,7 +54,12 @@
       "package.json",
       "LICENSE",
       "assets/icon.png",
-      "assets/icon.ico"
+      "assets/icon.ico",
+      "LOCAL-AUTOCOMPLETE.md",
+      "!**/*.gguf",
+      "!**/ov-int4/**",
+      "!**/npu-cache/**",
+      "!**/python/**"
     ],
     "win": {
       "target": "nsis",
@@ -67,6 +72,9 @@
     "nsis": {
       "artifactName": "Instant-TeX-${version}-Windows-Setup.exe",
       "perMachine": false
-    }
+    },
+    "asarUnpack": [
+      "electron/autocomplete-npu.py"
+    ]
   }
 }

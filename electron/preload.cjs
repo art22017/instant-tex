@@ -1,5 +1,13 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('instant',{
+  platform:process.platform,
+  autocompleteStatus:()=>ipcRenderer.invoke('autocomplete-status'),
+  configureAutocomplete:value=>ipcRenderer.invoke('autocomplete-configure',value),
+  startAutocomplete:()=>ipcRenderer.invoke('autocomplete-start'),
+  stopAutocomplete:()=>ipcRenderer.invoke('autocomplete-stop'),
+  completeLocally:value=>ipcRenderer.invoke('autocomplete-complete',value),
+  cancelAutocomplete:()=>ipcRenderer.invoke('autocomplete-cancel'),
+  openAutocompleteFolder:()=>ipcRenderer.invoke('autocomplete-folder'),
   saveText:text=>ipcRenderer.invoke('save-text',text),
   importResources:()=>ipcRenderer.invoke('import-resources'),
   openText:()=>ipcRenderer.invoke('open-text'),

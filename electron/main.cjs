@@ -1,4 +1,5 @@
-const {app,BrowserWindow,ipcMain,dialog,clipboard,Menu,session,safeStorage}=require('electron');
+const {app,BrowserWindow,ipcMain,dialog,clipboard,Menu,session,safeStorage,shell}=require('electron');
+const {Autocomplete}=require('./autocomplete.cjs');
 const {streamAnswer,requestBody}=require('./ai.cjs');
 const {MODELS}=require('./models.cjs');
 const {preferences}=require('./preferences.cjs');
@@ -13,12 +14,28 @@ const aiJobs=new Map();
 const workJobs=new Map();
 function cancelWork(job){job.controller.abort();if(job.done)job.finish(false);}
 const {randomUUID}=require('node:crypto');
+const APP_USER_MODEL_ID='local.instanttex.scratchpad.v2';
+if(process.platform==='win32')app.setAppUserModelId(APP_USER_MODEL_ID);
 app.setPath('userData',path.join(app.getPath('appData'),'InstantTeX'));
+const autocomplete=new Autocomplete(path.join(app.getPath('userData'),'autocomplete'),{
+  adapter:app.isPackaged?path.join(process.resourcesPath,'app.asar.unpacked/electron/autocomplete-npu.py'):path.join(__dirname,'autocomplete-npu.py'),
+});
+for(const [channel,handler] of Object.entries({
+  'autocomplete-status':async()=>{await autocomplete.ready;return autocomplete.status();},
+  'autocomplete-configure':value=>autocomplete.configure(value),
+  'autocomplete-start':()=>autocomplete.start(),
+  'autocomplete-stop':()=>autocomplete.stop(),
+  'autocomplete-complete':value=>autocomplete.complete(value),
+  'autocomplete-cancel':()=>autocomplete.cancel(),
+  'autocomplete-folder':async()=>{await autocomplete.ready;if(process.platform!=='win32')return;const error=await shell.openPath(autocomplete.root);if(error)throw new Error(error);},
+}))ipcMain.handle(channel,(event,value)=>{checkSender(event);return handler(value);});
+app.on('before-quit',()=>autocomplete.close());
 const exportJobs=new Map();
 const preload=path.join(__dirname,'preload.cjs');
 function checkSender(event){if(event.sender!==main?.webContents)throw new Error('Unknown sender');}
 function safeWindow(options={}){
   const win=new BrowserWindow({...options,webPreferences:{preload,contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false,...options.webPreferences}});
+  if(process.platform==='win32')win.setAppDetails({appId:APP_USER_MODEL_ID,appIconPath:process.execPath,appIconIndex:0});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',e=>e.preventDefault());
   return win;
