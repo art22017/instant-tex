@@ -15,5 +15,8 @@
 #autocomplete-detail,#autocomplete-load-time{font-size:11px;color:#7c9081;line-height:1.8;min-height:1.8em}
 #autocomplete-path{font-size:10px;overflow-wrap:anywhere;margin:10px 0;color:#7c9081}
 .cm-local-ghost{color:#89948c;opacity:.8;font-style:italic;font-weight:400;white-space:pre-wrap;pointer-events:none;user-select:none}
+.cm-local-ghost-single{display:inline-block;vertical-align:bottom;white-space:pre;overflow:hidden}
+#autocomplete-dialog .autocomplete-checkbox{justify-content:flex-start;gap:10px;cursor:pointer}
+#autocomplete-dialog .autocomplete-checkbox input{width:16px;height:16px;accent-color:#527d63}
 [data-theme=dark] #autocomplete-dialog{background:#25312a;color:#d1ddd3;--local-input:#1f2923;border-color:#465b4c}
 [data-theme=dark] #autocomplete-dialog button:hover{background:#3b4d40}

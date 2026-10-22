@@ -3,7 +3,8 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
 const {Autocomplete,validateConfig,makePrompt,cleanCompletion}=require('../electron/autocomplete.cjs');
 
 test('local completion validates devices and token bounds, retains FIM whitespace',()=>{
-  assert.deepEqual(validateConfig({device:'npu',maxTokens:128}),{device:'npu',maxTokens:128});
+  assert.deepEqual(validateConfig({device:'npu',maxTokens:128}),{device:'npu',maxTokens:128,inlineMiddle:false});
+  assert.equal(validateConfig({device:'gpu',maxTokens:32,inlineMiddle:true}).inlineMiddle,true);
   for(const input of [{device:'auto',maxTokens:32},{device:'cpu',maxTokens:0},{device:'gpu',maxTokens:129},{device:'gpu',maxTokens:8.5}])assert.throws(()=>validateConfig(input));
   assert.equal(makePrompt('x = ','\n\\]'),'<|fim_prefix|>x = <|fim_suffix|>\n\\]<|fim_middle|>');
   assert.equal(cleanCompletion(' \\frac{1}{3}\n\\]<|fim_pad|>junk','\n\\]'),' \\frac{1}{3}');
@@ -18,9 +19,10 @@ test('hardware cannot change while running or starting; length persists; non-Win
       await assert.rejects(runner.configure({device:'cpu',maxTokens:32}),/Сначала останови/);
     }
     runner.phase='on';await runner.configure({device:'gpu',maxTokens:64});
-    runner.phase='off';await runner.configure({device:'npu',maxTokens:16});
+    runner.phase='off';await runner.configure({device:'npu',maxTokens:16,inlineMiddle:true});
     const restored=new Autocomplete(root,{platform:'win32'});await restored.ready;
     assert.equal(restored.status().device,'npu');assert.equal(restored.status().maxTokens,16);
+    assert.equal(restored.status().inlineMiddle,true);
     const linux=new Autocomplete(root,{platform:'linux'});await linux.ready;
     assert.equal(linux.status().supported,false);await assert.rejects(linux.start(),/Windows/);
   }finally{assert.equal(path.dirname(root),os.tmpdir());await fs.rm(root,{recursive:true,force:true});}

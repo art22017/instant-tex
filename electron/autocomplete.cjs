@@ -9,7 +9,8 @@ const STOPS=['<|endoftext|>','<|fim_pad|>','<|file_sep|>','<|fim_prefix|>','<|fi
 function validateConfig(value){
   if(!value||!Object.hasOwn(DEVICES,value.device))throw new Error('Выбери Intel CPU, Intel Arc GPU или Intel NPU');
   if(!Number.isInteger(value.maxTokens)||value.maxTokens<8||value.maxTokens>128)throw new Error('Длина подсказки: от 8 до 128 токенов');
-  return{device:value.device,maxTokens:value.maxTokens};
+  if(value.inlineMiddle!==undefined&&typeof value.inlineMiddle!=='boolean')throw new Error('Некорректная настройка подсказок внутри строки');
+  return{device:value.device,maxTokens:value.maxTokens,inlineMiddle:value.inlineMiddle??false};
 }
 function makePrompt(prefix,suffix){return `<|fim_prefix|>${prefix}<|fim_suffix|>${suffix}<|fim_middle|>`;}
 function cleanCompletion(text,suffix){
@@ -24,7 +25,7 @@ async function freePort(){return new Promise((resolve,reject)=>{const s=net.crea
 class Autocomplete {
   constructor(root,{platform=process.platform,adapter=path.join(__dirname,'autocomplete-npu.py')}={}){
     this.root=root;this.platform=platform;this.adapter=adapter;
-    this.config={device:'gpu',maxTokens:32};this.phase='off';this.error=null;this.proc=null;this.epoch=0;this.pending=null;this.loadMs=null;this.operation=null;
+    this.config={device:'gpu',maxTokens:32,inlineMiddle:false};this.phase='off';this.error=null;this.proc=null;this.epoch=0;this.pending=null;this.loadMs=null;this.operation=null;
     this.ready=this.readConfig();
   }
   async readConfig(){

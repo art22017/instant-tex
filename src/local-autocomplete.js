@@ -4,10 +4,33 @@ import {completionStatus,closeCompletion} from '@codemirror/autocomplete';
 import './local-autocomplete.css';
 
 const showGhost=StateEffect.define();
+function removeRepeatedClosers(text,suffix){
+  const suffixClosers=new Set([...suffix.matchAll(/\\end\{[^}\r\n]+\}/g)].map(match=>match[0]));
+  for(const match of text.matchAll(/\\end\{[^}\r\n]+\}/g)){
+    if(suffixClosers.has(match[0]))return text.slice(0,match.index).replace(/[\t \r\n]+$/,'');
+  }
+  return text;
+}
 class Ghost extends WidgetType {
-  constructor(text){super();this.text=text;}
-  eq(other){return other.text===this.text;}
-  toDOM(){const span=document.createElement('span');span.className='cm-local-ghost';span.textContent=this.text;span.setAttribute('aria-hidden','true');span.contentEditable='false';return span;}
+  constructor(text,middle=false){super();this.text=text;this.middle=middle;}
+  eq(other){return other.text===this.text&&other.middle===this.middle;}
+  toDOM(view){
+    const span=document.createElement('span');
+    span.className='cm-local-ghost'+(this.middle?' cm-local-ghost-middle':'');
+    span.textContent=this.text;span.setAttribute('aria-hidden','true');span.contentEditable='false';
+    if(this.middle&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+      const single=!this.text.includes('\n');
+      if(single)span.classList.add('cm-local-ghost-single');
+      span.ghostFrame=requestAnimationFrame(()=>{
+        if(!span.isConnected)return;
+        const width=span.getBoundingClientRect().width;
+        span.ghostAnimation=span.animate(single?[{width:'0px',opacity:0},{width:`${width}px`,opacity:.8}]:[{opacity:0},{opacity:.8}],{duration:160,easing:'ease-out'});
+        span.ghostAnimation.finished.then(()=>{if(span.isConnected)view.requestMeasure();}).catch(()=>{});
+      });
+    }
+    return span;
+  }
+  destroy(dom){cancelAnimationFrame(dom.ghostFrame);dom.ghostAnimation?.cancel();}
   ignoreEvent(){return true;}
 }
 export const ghostField=StateField.define({
@@ -17,16 +40,17 @@ export const ghostField=StateField.define({
     for(const effect of tr.effects)if(effect.is(showGhost))value=effect.value;
     return value;
   },
-  provide:field=>EditorView.decorations.from(field,value=>value?Decoration.set([Decoration.widget({widget:new Ghost(value.text),side:1}).range(value.pos)]):Decoration.none),
+  provide:field=>EditorView.decorations.from(field,value=>value?Decoration.set([Decoration.widget({widget:new Ghost(value.text,value.middle),side:1}).range(value.pos)]):Decoration.none),
 });
 
 export function localAutocomplete({api,toast}){
   if(api?.platform!=='win32')return{extension:[],mount(){}};
-  let view,locked=()=>false,ready=false,sequence=0,timer,lastEpoch,lastPhase,busy=false;
+  let view,locked=()=>false,ready=false,sequence=0,timer,lastEpoch,lastPhase,busy=false,middleEnabled=false;
   const $=id=>document.getElementById(id);
   function cancel(){clearTimeout(timer);sequence++;api.cancelAutocomplete().catch(()=>{});}
   function clear(){cancel();if(view&&!view.destroyed&&view.state.field(ghostField))view.dispatch({effects:showGhost.of(null)});}
-  function allowed(){return ready&&!busy&&!locked()&&view.hasFocus&&view.state.selection.main.empty&&!view.composing;}
+  function inMiddle(){const pos=view.state.selection.main.head;return !!view.state.doc.sliceString(pos,view.state.doc.lineAt(pos).to).trim();}
+  function allowed(){return ready&&!busy&&!locked()&&view.hasFocus&&view.state.selection.main.empty&&!view.composing&&(middleEnabled||!inMiddle());}
   async function request(){
     clearTimeout(timer);
     if(!allowed()||completionStatus(view.state))return;
@@ -37,8 +61,9 @@ export function localAutocomplete({api,toast}){
     try{
       const result=await api.completeLocally({prefix,suffix});
       if(id!==sequence||view.destroyed||view.state.doc!==doc||view.state.selection.main.head!==pos||!allowed()||completionStatus(view.state))return;
-      if(result.text)view.dispatch({effects:showGhost.of({pos,text:result.text})});
-      $('autocomplete-detail').textContent=result.text?`Подсказка за ${result.elapsedMs} мс${result.tokensPerSecond?` · ${result.tokensPerSecond.toFixed(0)} ток/с`:''}`:'Продолжения нет — попробуй дописать строку';
+      const suggestion=removeRepeatedClosers(result.text||'',suffix);
+      if(suggestion)view.dispatch({effects:showGhost.of({pos,text:suggestion,middle:inMiddle()})});
+      $('autocomplete-detail').textContent=suggestion?`Подсказка за ${result.elapsedMs} мс${result.tokensPerSecond?` · ${result.tokensPerSecond.toFixed(0)} ток/с`:''}`:'Продолжения нет — попробуй дописать строку';
     }catch(error){if(id===sequence)$('autocomplete-detail').textContent=error.message;}
   }
   function schedule(){cancel();if(allowed())timer=setTimeout(request,350);}
@@ -56,13 +81,16 @@ export function localAutocomplete({api,toast}){
   }),EditorView.domEventHandlers({blur:()=>{clear();return false;},compositionstart:()=>{clear();return false;},compositionend:()=>{schedule();return false;}})];
   function paint(state){
     const enabled=state.phase==='on';
-    if(state.epoch!==lastEpoch||state.phase!==lastPhase){clear();lastEpoch=state.epoch;lastPhase=state.phase;}
+    if(state.epoch!==lastEpoch||state.phase!==lastPhase||middleEnabled!==!!state.inlineMiddle){clear();lastEpoch=state.epoch;lastPhase=state.phase;}
+    middleEnabled=!!state.inlineMiddle;
     ready=enabled;
     const loading=state.phase==='starting'||state.phase==='stopping',running=loading||enabled||!!state.pid;
     $('autocomplete-device').value=state.device;
     $('autocomplete-device').disabled=running||busy;
     if(document.activeElement!==$('autocomplete-length'))$('autocomplete-length').value=state.maxTokens;
     $('autocomplete-length').disabled=loading||busy;
+    $('autocomplete-middle').checked=middleEnabled;
+    $('autocomplete-middle').disabled=loading||busy;
     $('autocomplete-start').disabled=running||busy;
     $('autocomplete-stop').disabled=!running||state.phase==='stopping'||busy;
     const labels={off:'Модель выключена',starting:'Включаю модель…',stopping:'Останавливаю модель…',on:`Включено · ${state.deviceName}`,error:'Не удалось запустить модель'};
@@ -85,8 +113,10 @@ export function localAutocomplete({api,toast}){
     $('autocomplete-toggle').onclick=()=>{$('autocomplete-dialog').showModal();refresh();};
     $('autocomplete-close').onclick=()=>$('autocomplete-dialog').close();
     $('autocomplete-dialog').addEventListener('close',()=>editor.focus());
-    $('autocomplete-device').onchange=()=>{const device=$('autocomplete-device').value;act(()=>api.configureAutocomplete({device,maxTokens:Number($('autocomplete-length').value)}));};
-    $('autocomplete-length').onchange=()=>{const maxTokens=Number($('autocomplete-length').value);act(()=>api.configureAutocomplete({device:$('autocomplete-device').value,maxTokens}));};
+    const saveConfig=()=>{const value={device:$('autocomplete-device').value,maxTokens:Number($('autocomplete-length').value),inlineMiddle:$('autocomplete-middle').checked};act(()=>api.configureAutocomplete(value));};
+    $('autocomplete-device').onchange=saveConfig;
+    $('autocomplete-length').onchange=saveConfig;
+    $('autocomplete-middle').onchange=saveConfig;
     $('autocomplete-start').onclick=()=>{
       // Starting is asynchronous so polling and Stop remain available during NPU compilation.
       ready=false;clear();$('autocomplete-state').textContent='Включаю модель…';

@@ -17,15 +17,18 @@ import {initAI,previewSelection} from './ai-ui.js';
 import {initWorkReview} from './work-review.js';
 import {initFileSync} from './file-sync.js';
 import {localAutocomplete} from './local-autocomplete.js';
+import {bracketCompletion} from './brackets.js';
 
 const $=id=>document.getElementById(id),api=window.instant,resources=new ResourceStore(),renderer=new DraftRenderer({resolveImage:name=>resources.image(name),getBibliography:name=>resources.bibliography(name)});
 mountIcons();
+let devDraft=null;
+if(import.meta.hot)try{devDraft=JSON.parse(sessionStorage.getItem('instant-dev-draft'));if(devDraft?.assets)resources.load(devDraft.assets);}catch{}
 let saved=[];try{saved=await api?.loadDictionary()||[];}catch{}
 let appearance={editorSize:14,editorWeight:670,previewSize:19,previewZoom:100,theme:'light'};
 try{appearance={...appearance,...await api?.loadAppearance()};}catch{}
 const dictionary=new CommandDictionary(saved,entries=>api?.saveDictionary(entries).catch(()=>toast('Не удалось сохранить словарь')));
 const autocomplete=localAutocomplete({api,toast});
-let frame=0,result,zoom=appearance.previewZoom,dirty=false,sourceName='Мой черновик',exporting=false;
+let frame=0,result,zoom=appearance.previewZoom,dirty=false,sourceName=devDraft?.name||'Мой черновик',exporting=false;
 let selected=null,fileSync=null;
 const editorTheme=new Compartment();
 function themeExtension(){
@@ -36,9 +39,10 @@ const tex=StreamLanguage.define({token(stream){
   if(stream.match(/^%.*$/))return 'comment';if(stream.match(/^\\(?:[a-zA-Z]+\*?|.)/))return 'keyword';
   if(stream.match(/^[{}\[\]$&^_]/))return 'bracket';if(stream.match(/^\d+(?:\.\d+)?/))return 'number';stream.next();return null;
 }});
-const editor=new EditorView({state:EditorState.create({doc:documentTemplate,selection:{anchor:startPosition},extensions:[
+const editor=new EditorView({state:EditorState.create({doc:devDraft?.text??documentTemplate,selection:{anchor:devDraft?.head??startPosition},extensions:[
   lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),drawSelection(),history(),EditorView.lineWrapping,tex,
   autocomplete.extension,
+  bracketCompletion,
   autocompletion({override:[completionSource(dictionary)],activateOnTyping:true,maxRenderedOptions:100,interactionDelay:0,icons:false}),completionKeys,
   keymap.of([{key:'Mod-s',run:()=>{save();return true;}},{key:'Mod-o',run:()=>{open();return true;}},{key:'Mod-n',run:()=>{newDraft();return true;}},{key:'Mod-Shift-f',run:()=>{toggleFocus();return true;}},...defaultKeymap,...historyKeymap,indentWithTab]),
   editorTheme.of(themeExtension()),
@@ -175,4 +179,9 @@ const divider=$('divider');divider.onpointerdown=e=>divider.setPointerCapture(e.
 divider.onpointermove=e=>{if(divider.hasPointerCapture(e.pointerId)){const box=$('workspace').getBoundingClientRect();$('workspace').style.setProperty('--source-width',Math.max(25,Math.min(75,(e.clientX-box.left)/box.width*100))+'%');}};
 divider.onpointerup=e=>divider.releasePointerCapture(e.pointerId);
 divider.onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const current=parseFloat(getComputedStyle($('workspace')).getPropertyValue('--source-width'));$('workspace').style.setProperty('--source-width',Math.max(25,Math.min(75,current+(e.key==='ArrowLeft'?-2:2)))+'%');}};
-api?.onSaveRequest(save);render();setDirty(false);updateCursor();editor.focus();
+api?.onSaveRequest(save);render();setDirty(devDraft?.dirty??false);updateCursor();editor.focus();
+if(import.meta.hot){
+  const keepDevDraft=()=>{try{sessionStorage.setItem('instant-dev-draft',JSON.stringify({text:editor.state.doc.toString(),head:editor.state.selection.main.head,name:sourceName,dirty,assets:resources.assets}));}catch{}};
+  import.meta.hot.on('vite:beforeFullReload',keepDevDraft);
+  window.addEventListener('beforeunload',keepDevDraft);
+}

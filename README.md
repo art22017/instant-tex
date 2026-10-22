@@ -14,7 +14,7 @@
 
 ## Возможности
 
-- Редактор CodeMirror 6 с автодополнением LaTeX, умным вводом окружений, undo/redo и общим словарём команд.
+- Редактор CodeMirror 6 с автодополнением LaTeX, парными скобками, умным вводом окружений, undo/redo и общим словарём команд.
 - В Windows — необязательные локальные серые FIM-подсказки от Qwen2.5-Coder 1.5B Base на Intel CPU, Arc GPU или NPU.
 - Мгновенный предпросмотр русского текста и математических формул на KaTeX, включая `\boxed`, `gather`, `align`, матрицы и другие поддерживаемые KaTeX команды.
 - Шаблон нового решения с русской преамбулой и секциями «Задача», «Решение», «Ответ».
@@ -32,7 +32,8 @@
 Кнопка **Autocomplete** в верхней панели: выбор Intel CPU / Intel Arc GPU / Intel NPU,
 **Включить**, **Остановить**, максимальная длина от 8 до 128 токенов. Пока модель работает,
 смена устройства заблокирована. **Tab** принимает серую подсказку, **Esc** скрывает,
-**Alt + \** запрашивает вручную. Текст обрабатывается локально, ключ OpenRouter не нужен.
+**Alt + \** запрашивает вручную. Подсказки внутри строки можно включить в настройках.
+Текст обрабатывается локально, ключ OpenRouter не нужен.
 
 Модель, llama.cpp, Python/OpenVINO и кеш устанавливаются пользователем отдельно в
 `%APPDATA%\InstantTeX\autocomplete` и **не входят в установщик**. В Linux и macOS
@@ -61,11 +62,11 @@ npm test
 npm run build
 ```
 
-`npm run dev` запускает только UI в браузере; диалоги сохранения и экспорта доступны в Electron. Windows NSIS-установщик из локальной среды создаётся командой `npm run package`.
+`npm run dev` запускает только UI в браузере. `npm run dev:desktop` открывает Electron с исходниками через Vite и горячим обновлением UI, без сборки приложения или установщика; диалоги сохранения и экспорта работают. Windows NSIS-установщик из локальной среды создаётся командой `npm run package`.
 
 ## Релизы
 
-Опубликуй версионный Git-тег, совпадающий с `package.json` (сейчас `v0.9.0`). GitHub Actions проверит версию, выполнит unit-тесты и соберёт приложение на GitHub runners для Windows x64, Ubuntu x64 и macOS Apple Silicon arm64. Успешный запуск создаст GitHub Release с Windows NSIS Setup, Linux AppImage и macOS DMG/ZIP. Для сборки не требуются Actions secrets.
+Опубликуй версионный Git-тег, совпадающий с `package.json` (сейчас `v0.9.1`). GitHub Actions проверит версию, выполнит unit-тесты и соберёт приложение на GitHub runners для Windows x64, Ubuntu x64 и macOS Apple Silicon arm64. Успешный запуск создаст GitHub Release с Windows NSIS Setup, Linux AppImage и macOS DMG/ZIP. Для сборки не требуются Actions secrets.
 
 Технологии: Electron, CodeMirror 6, KaTeX, JetBrains Mono Variable, Computer Modern, Lucide.
 

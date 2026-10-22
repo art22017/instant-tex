@@ -6,6 +6,8 @@ const {preferences}=require('./preferences.cjs');
 const fs=require('node:fs/promises');
 const {validateDocument,readResource,openDocument,saveDocument}=require('./document.cjs');
 const path=require('node:path');
+const devURL=!app.isPackaged&&process.env.INSTANT_TEX_DEV_URL?new URL(process.env.INSTANT_TEX_DEV_URL):null;
+if(devURL&&(devURL.protocol!=='http:'||!['127.0.0.1','localhost'].includes(devURL.hostname)))throw new Error('Dev server must use localhost');
 let main,dirty=false,allowClose=false,lastPath=null,closePending=false;
 let settings;
 const {FileWatch}=require('./file-watch.cjs');
@@ -37,14 +39,20 @@ function safeWindow(options={}){
   const win=new BrowserWindow({...options,webPreferences:{preload,contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false,...options.webPreferences}});
   if(process.platform==='win32')win.setAppDetails({appId:APP_USER_MODEL_ID,appIconPath:process.execPath,appIconIndex:0});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
-  win.webContents.on('will-navigate',e=>e.preventDefault());
+  win.webContents.on('will-navigate',(e,url)=>{
+    if(devURL)try{if(new URL(url).origin===devURL.origin)return;}catch{}
+    e.preventDefault();
+  });
   return win;
 }
 async function createWindow(){
   Menu.setApplicationMenu(null);
   main=safeWindow({width:1420,height:1000,minWidth:900,minHeight:600,backgroundColor:'#eef1ed',title:'Instant TeX',icon:path.join(__dirname,'../assets/icon.ico'),show:false});
   main.webContents.setZoomFactor(1);
-  await main.loadFile(path.join(__dirname,'../dist/index.html'));
+  if(devURL){
+    main.on('page-title-updated',(event,title)=>{event.preventDefault();main.setTitle(`${title} · Dev`);});
+    await main.loadURL(devURL.href);
+  }else await main.loadFile(path.join(__dirname,'../dist/index.html'));
   main.show();
   main.on('close',async e=>{
     if(!dirty||allowClose)return;
@@ -148,7 +156,8 @@ async function exportBuffer(payload){
   exportJobs.set(win.webContents.id,payload.html);
   try{
     win.webContents.setZoomFactor(1);
-    await win.loadFile(path.join(__dirname,'../dist/export.html'));
+    if(devURL)await win.loadURL(new URL('export.html',devURL).href);
+    else await win.loadFile(path.join(__dirname,'../dist/export.html'));
     win.webContents.setZoomFactor(1);
     const size=await win.webContents.executeJavaScript('window.exportReady');
     if(payload.format==='pdf')return await win.webContents.printToPDF({printBackground:true,pageSize:'A4',margins:{top:0.4,bottom:0.4,left:0.4,right:0.4},preferCSSPageSize:true});
@@ -186,8 +195,12 @@ ipcMain.handle('export-draft',async(event,payload)=>{
 });
 app.whenReady().then(async()=>{
   settings=preferences(app,safeStorage);await settings.ready;
-  // All runtime resources are bundled locally; block network traffic, including pasted URLs.
-  session.defaultSession.webRequest.onBeforeRequest((details,callback)=>callback({cancel:/^https?:|^wss?:/i.test(details.url)}));
+  // Packaged apps stay offline; development allows only the selected local Vite server.
+  session.defaultSession.webRequest.onBeforeRequest((details,callback)=>{
+    let allowed=false;
+    if(devURL)try{const target=new URL(details.url);allowed=target.host===devURL.host&&['http:','ws:'].includes(target.protocol);}catch{}
+    callback({cancel:/^https?:|^wss?:/i.test(details.url)&&!allowed});
+  });
   await createWindow();
 });
 app.on('window-all-closed',()=>{fileWatch.stop();for(const job of aiJobs.values())job.abort();for(const job of workJobs.values())cancelWork(job);settings?.flush().finally(()=>app.quit());});

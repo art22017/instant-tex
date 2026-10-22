@@ -55,6 +55,8 @@
   <small>Чтобы сменить устройство, сначала останови модель.</small>
   <label for="autocomplete-length">Максимальная длина подсказки<input id="autocomplete-length" type="number" min="8" max="128" step="1" value="32"></label>
   <small>От 8 до 128 токенов. Токен — часть слова или символ; 32 обычно хватает для короткого продолжения.</small>
+  <label class="autocomplete-checkbox"><input id="autocomplete-middle" type="checkbox">Подсказки внутри строки</label>
+  <small>Серое продолжение плавно раздвигает текст справа от курсора. Tab вставляет подсказку, Esc убирает её.</small>
   <div class="autocomplete-actions"><button id="autocomplete-start" type="button">Включить</button><button id="autocomplete-stop" type="button" disabled>Остановить</button></div>
   <div id="autocomplete-state" role="status">Модель выключена</div><div id="autocomplete-load-time"></div><div id="autocomplete-detail"></div>
   <p><kbd>Tab</kbd> — принять серую подсказку · <kbd>Esc</kbd> — скрыть · <kbd>Alt + \</kbd> — запросить.</p>
